@@ -4,6 +4,11 @@ import { unlink } from 'fs/promises';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
 import ffmpeg from 'fluent-ffmpeg';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+
+// asar 패키징 시 경로 보정
+const ffmpegPath = ffmpegInstaller.path.replace('app.asar', 'app.asar.unpacked');
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 const LMS_SESSION = 'persist:lms';
 

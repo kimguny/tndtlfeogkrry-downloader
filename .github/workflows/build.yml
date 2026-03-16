@@ -32,7 +32,9 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install
+        run: |
+          echo "enable-pre-post-scripts=true" >> .npmrc
+          pnpm install
 
       - name: Build Electron app (macOS)
         if: matrix.os == 'macos-latest'

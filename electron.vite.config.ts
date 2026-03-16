@@ -6,7 +6,7 @@ export default defineConfig({
   main: {
     build: {
       rollupOptions: {
-        external: ['fluent-ffmpeg']
+        external: ['fluent-ffmpeg', '@ffmpeg-installer/ffmpeg']
       }
     }
   },
