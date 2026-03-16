@@ -1,0 +1,469 @@
+import { app, shell, BrowserWindow, ipcMain, dialog, session } from 'electron';
+import { join, resolve } from 'path';
+import { unlink } from 'fs/promises';
+import { electronApp, optimizer, is } from '@electron-toolkit/utils';
+import icon from '../../resources/icon.png?asset';
+import ffmpeg from 'fluent-ffmpeg';
+
+const LMS_SESSION = 'persist:lms';
+
+// 로그인 세션을 유지하는 단일 BrowserWindow (숨김/표시 전환)
+let lmsWin: BrowserWindow | null = null;
+
+function getLmsSession(): Electron.Session {
+  return session.fromPartition(LMS_SESSION);
+}
+
+function getOrCreateLmsWin(): BrowserWindow {
+  if (lmsWin && !lmsWin.isDestroyed()) {
+    return lmsWin;
+  }
+  lmsWin = new BrowserWindow({
+    width: 1000,
+    height: 700,
+    show: false,
+    closable: true,
+    titleBarStyle: 'default',
+    webPreferences: {
+      session: getLmsSession()
+    }
+  });
+  // 닫기 버튼 누르면 파괴하지 않고 숨기기만 함
+  lmsWin.on('close', (e) => {
+    if (lmsWin && !lmsWin.isDestroyed()) {
+      e.preventDefault();
+      lmsWin.hide();
+    }
+  });
+  return lmsWin;
+}
+
+function createWindow(): void {
+  const mainWindow = new BrowserWindow({
+    width: 900,
+    height: 670,
+    show: false,
+    autoHideMenuBar: true,
+    ...(process.platform === 'linux' ? { icon } : {}),
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  });
+
+  mainWindow.on('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  mainWindow.webContents.setWindowOpenHandler((details) => {
+    shell.openExternal(details.url);
+    return { action: 'deny' };
+  });
+
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL']);
+  } else {
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
+  }
+}
+
+app.whenReady().then(() => {
+  electronApp.setAppUserModelId('com.electron');
+
+  app.on('browser-window-created', (_, window) => {
+    optimizer.watchWindowShortcuts(window);
+  });
+
+  // 로그인 창 열기 (같은 BrowserWindow를 재사용, 숨김/표시)
+  ipcMain.handle('open-login', async () => {
+    const win = getOrCreateLmsWin();
+    win.loadURL('https://canvas.ssu.ac.kr/login');
+    win.show();
+    win.focus();
+
+    // 로그인 성공 시 대시보드로 이동하면 자동으로 숨김
+    return new Promise<{ success: boolean }>((resolve) => {
+      const onNavigate = (_event: Electron.Event, url: string): void => {
+        if (
+          url.includes('/dashboard') ||
+          (url.includes('canvas.ssu.ac.kr') && !url.includes('/login') && !url.includes('sso'))
+        ) {
+          win.webContents.removeListener('did-navigate', onNavigate);
+          win.hide();
+          resolve({ success: true });
+        }
+      };
+      win.webContents.on('did-navigate', onNavigate);
+
+      // 유저가 창을 닫으면(숨기면) 수동 확인
+      const onHide = (): void => {
+        win.removeListener('hide', onHide);
+        win.webContents.removeListener('did-navigate', onNavigate);
+        // 현재 URL로 로그인 여부 판단
+        const currentUrl = win.webContents.getURL();
+        const loggedIn = currentUrl.includes('canvas.ssu.ac.kr') && !currentUrl.includes('/login');
+        resolve({ success: loggedIn });
+      };
+      win.on('hide', onHide);
+    });
+  });
+
+  // 수강 과목 조회 (dashboard_cards API)
+  ipcMain.handle('fetch-courses', async () => {
+    try {
+      const win = getOrCreateLmsWin();
+      const currentUrl = win.webContents.getURL();
+
+      if (!currentUrl.includes('canvas.ssu.ac.kr') || currentUrl.includes('/login')) {
+        throw new Error('로그인이 필요합니다. 다시 로그인해주세요.');
+      }
+
+      const courses = await win.webContents.executeJavaScript(`
+        (async () => {
+          const res = await fetch('/api/v1/dashboard/dashboard_cards', { credentials: 'include' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const text = await res.text();
+          return JSON.parse(text.replace(/^while\\(1\\);/, ''));
+        })()
+      `);
+
+      return {
+        success: true,
+        courses: courses.map((c: { id: string; shortName: string; term: string }) => ({
+          id: c.id,
+          name: c.shortName,
+          term: c.term
+        }))
+      };
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg.includes('401') || msg.includes('403')) {
+        return { success: false, error: '로그인이 만료되었습니다. 다시 로그인해주세요.' };
+      }
+      return { success: false, error: msg };
+    }
+  });
+
+  // 강의 목록 조회 (로그인된 페이지 컨텍스트에서 직접 fetch)
+  ipcMain.handle('fetch-modules', async (_event, courseId: string) => {
+    try {
+      const win = getOrCreateLmsWin();
+      const currentUrl = win.webContents.getURL();
+      console.log('현재 lmsWin URL:', currentUrl);
+
+      // 로그인된 페이지가 canvas가 아니면 이동
+      if (!currentUrl.includes('canvas.ssu.ac.kr') || currentUrl.includes('/login')) {
+        throw new Error('로그인이 필요합니다. 다시 로그인해주세요.');
+      }
+
+      // 페이지에서 사용 가능한 인증 정보 탐색
+      const authInfo = await win.webContents.executeJavaScript(`
+        (async () => {
+          // Canvas ENV에서 토큰 확인
+          const env = window.ENV || {};
+          // 메타 태그에서 CSRF 토큰
+          const csrfMeta = document.querySelector('meta[name="csrf-token"]')?.content;
+          // 쿠키에서 토큰 추출
+          const cookies = Object.fromEntries(document.cookie.split('; ').map(c => c.split('=')));
+          return {
+            csrfMeta,
+            accessToken: env.access_token || env.api_token || null,
+            envKeys: Object.keys(env).join(','),
+            xnApiToken: cookies['xn_api_token'] || null,
+            localStorageKeys: Object.keys(localStorage).join(','),
+          };
+        })()
+      `);
+      console.log('인증 정보:', JSON.stringify(authInfo, null, 2));
+
+      const modules = await win.webContents.executeJavaScript(`
+        (async () => {
+          const url = 'https://canvas.ssu.ac.kr/learningx/api/v1/courses/${courseId}/modules?include_detail=true';
+
+          // 1차: xn_api_token을 Bearer로
+          const xnToken = document.cookie.match(/xn_api_token=([^;]+)/)?.[1];
+          const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content
+            || document.cookie.match(/_csrf_token=([^;]+)/)?.[1];
+
+          const h = {
+            'Accept': 'application/json',
+          };
+          if (xnToken) h['Authorization'] = 'Bearer ' + decodeURIComponent(xnToken);
+          if (csrfToken) h['X-CSRF-Token'] = decodeURIComponent(csrfToken);
+
+          const res = await fetch(url, { credentials: 'include', headers: h });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return await res.json();
+        })()
+      `);
+
+      interface VideoItem {
+        title: string;
+        contentId: string;
+        duration: number;
+        fileSize: number;
+        thumbnailUrl: string;
+        weekPosition: number;
+      }
+
+      const videos: VideoItem[] = [];
+
+      for (const mod of modules) {
+        if (!mod.module_items) continue;
+        for (const item of mod.module_items) {
+          if (
+            ['everlec', 'movie', 'video', 'mp4'].includes(
+              item.content_data?.item_content_data?.content_type
+            )
+          ) {
+            const data = item.content_data.item_content_data;
+            if (data.content_id) {
+              videos.push({
+                title: item.title,
+                contentId: data.content_id,
+                duration: data.duration || 0,
+                fileSize: data.total_file_size || 0,
+                thumbnailUrl: data.thumbnail_url || '',
+                weekPosition: item.content_data.week_position || 0
+              });
+            }
+          }
+        }
+      }
+
+      return { success: true, videos };
+    } catch (err) {
+      const msg = (err as Error).message;
+      if (msg.includes('401') || msg.includes('403')) {
+        return { success: false, error: '로그인이 만료되었습니다. 다시 로그인해주세요.' };
+      }
+      return { success: false, error: msg };
+    }
+  });
+
+  // MP4 → MP3 변환
+  function convertToMp3(mp4Path: string, mp3Path: string): Promise<void> {
+    return new Promise((res, rej) => {
+      ffmpeg(mp4Path)
+        .noVideo()
+        .audioCodec('libmp3lame')
+        .audioQuality(2)
+        .output(mp3Path)
+        .on('end', () => res())
+        .on('error', (err) => rej(err))
+        .run();
+    });
+  }
+
+  // 단일 비디오 다운로드 공통 로직
+  async function downloadOne(
+    contentId: string,
+    filePath: string,
+    sender: Electron.WebContents,
+    format: 'mp4' | 'mp3' = 'mp4'
+  ): Promise<{ success: boolean; error?: string; filePath?: string }> {
+    const lmsSession = getLmsSession();
+
+    const contentApiUrl = `https://commons.ssu.ac.kr/viewer/ssplayer/uniplayer_support/content.php?content_id=${contentId}&_=${Date.now()}`;
+    const dlWin = new BrowserWindow({
+      show: false,
+      webPreferences: { session: lmsSession }
+    });
+
+    try {
+      await dlWin.loadURL(`https://commons.ssu.ac.kr/em/${contentId}`);
+
+      const result = await dlWin.webContents.executeJavaScript(`
+        (async () => {
+          const res = await fetch('${contentApiUrl}', { credentials: 'include' });
+          const status = res.status;
+          const xml = await res.text();
+          if (!res.ok) return { error: 'HTTP ' + status, xml };
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(xml, 'text/xml');
+          const contentType = doc.querySelector('content_type')?.textContent?.trim();
+
+          if (contentType === 'video1') {
+            const mediaUri = doc.querySelector('desktop > html5 > media_uri');
+            return { xml, mediaUrl: mediaUri?.textContent?.trim() || null };
+          } else if (contentType === 'upf') {
+            const fileName = doc.querySelector('main_media_list > main_media')?.textContent?.trim();
+            const mediaUriTemplate = doc.querySelector('media_uri')?.textContent?.trim();
+            if (fileName && mediaUriTemplate) {
+              return { xml, mediaUrl: mediaUriTemplate.replace('[MEDIA_FILE]', fileName) };
+            }
+            if (fileName) {
+              const contentUri = doc.querySelector('content_uri')?.textContent?.trim();
+              if (contentUri) {
+                const base = contentUri.replace(/web_files$/, 'media_files');
+                return { xml, mediaUrl: base + '/' + fileName };
+              }
+            }
+            return { xml, mediaUrl: null };
+          } else {
+            const allUris = [...doc.querySelectorAll('media_uri')].map(el => el.textContent?.trim());
+            const valid = allUris.find(u => u && u.includes('.mp4') && !u.includes('['));
+            return { xml, mediaUrl: valid || null };
+          }
+        })()
+      `);
+
+      console.log('content.php 결과 - mediaUrl:', result.mediaUrl);
+      if (result.error) throw new Error('content.php ' + result.error);
+      if (!result.mediaUrl) {
+        const m = result.xml?.match(/<content_type>([^<]+)<\/content_type>/);
+        throw new Error(`다운로드할 수 없는 콘텐츠 형식입니다 (${m?.[1] || '알 수 없음'})`);
+      }
+
+      const videoUrl = result.mediaUrl;
+      console.log('비디오 URL:', videoUrl);
+
+      // Referer 헤더 주입
+      const filter = { urls: ['https://ssuin-object.commonscdn.com/*'] };
+      lmsSession.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
+        details.requestHeaders['Referer'] = 'https://commons.ssu.ac.kr/';
+        details.requestHeaders['Origin'] = 'https://commons.ssu.ac.kr';
+        callback({ requestHeaders: details.requestHeaders });
+      });
+
+      // 다운로드 (MP3인 경우 임시 MP4로 먼저 받고 변환)
+      const actualSavePath = format === 'mp3' ? filePath.replace(/\.mp3$/, '.tmp.mp4') : filePath;
+
+      const dlResult = await new Promise<{ success: boolean; error?: string; filePath?: string }>((dlResolve) => {
+        const onWillDownload = (_e: Electron.Event, item: Electron.DownloadItem): void => {
+          item.setSavePath(actualSavePath);
+
+          item.on('updated', (_e, state) => {
+            if (state === 'progressing' && !item.isPaused()) {
+              const received = item.getReceivedBytes();
+              const total = item.getTotalBytes();
+              if (total > 0) {
+                sender.send('download-progress', {
+                  contentId,
+                  downloaded: received,
+                  total,
+                  percent: format === 'mp3' ? Math.round((received / total) * 90) : Math.round((received / total) * 100)
+                });
+              }
+            }
+          });
+
+          item.once('done', (_e, state) => {
+            lmsSession.removeListener('will-download', onWillDownload);
+            if (!dlWin.isDestroyed()) dlWin.destroy();
+            if (state === 'completed') {
+              dlResolve({ success: true, filePath: actualSavePath });
+            } else {
+              dlResolve({ success: false, error: `다운로드 ${state}` });
+            }
+          });
+        };
+
+        lmsSession.on('will-download', onWillDownload);
+        dlWin.webContents.downloadURL(videoUrl);
+
+        setTimeout(() => {
+          if (!dlWin.isDestroyed()) {
+            lmsSession.removeListener('will-download', onWillDownload);
+            dlWin.destroy();
+            dlResolve({ success: false, error: '다운로드 타임아웃 (5분)' });
+          }
+        }, 300000);
+      });
+
+      if (!dlResult.success) return dlResult;
+
+      // MP3 변환
+      if (format === 'mp3') {
+        try {
+          sender.send('download-progress', { contentId, downloaded: 0, total: 0, percent: 95 });
+          await convertToMp3(actualSavePath, filePath);
+          await unlink(actualSavePath);
+          sender.send('download-progress', { contentId, downloaded: 0, total: 0, percent: 100 });
+          return { success: true, filePath };
+        } catch (err) {
+          await unlink(actualSavePath).catch(() => {});
+          return { success: false, error: `MP3 변환 실패: ${(err as Error).message}` };
+        }
+      }
+
+      return dlResult;
+    } catch (err) {
+      if (!dlWin.isDestroyed()) dlWin.destroy();
+      return { success: false, error: (err as Error).message };
+    }
+  }
+
+  // 비디오 다운로드 (개별)
+  ipcMain.handle('download-video', async (event, contentId: string, title: string, format: 'mp4' | 'mp3' = 'mp4') => {
+    const mainWin = BrowserWindow.fromWebContents(event.sender);
+    if (!mainWin) return { success: false, error: 'No window found' };
+
+    const safeName = title.replace(/[/\\?%*:|"<>]/g, '_');
+    const ext = format === 'mp3' ? 'mp3' : 'mp4';
+    const filterName = format === 'mp3' ? 'Audio' : 'Video';
+    const saveResult = await dialog.showSaveDialog(mainWin, {
+      defaultPath: `${safeName}.${ext}`,
+      filters: [{ name: filterName, extensions: [ext] }]
+    });
+
+    if (saveResult.canceled || !saveResult.filePath) {
+      return { success: false, error: 'cancelled' };
+    }
+
+    return downloadOne(contentId, saveResult.filePath, event.sender, format);
+  });
+
+  // 전체 다운로드
+  ipcMain.handle(
+    'download-all',
+    async (event, videos: { contentId: string; title: string }[], format: 'mp4' | 'mp3' = 'mp4') => {
+      const mainWin = BrowserWindow.fromWebContents(event.sender);
+      if (!mainWin) return { success: false, error: 'No window found' };
+
+      const folderResult = await dialog.showOpenDialog(mainWin, {
+        properties: ['openDirectory', 'createDirectory'],
+        title: '다운로드 폴더 선택'
+      });
+
+      if (folderResult.canceled || !folderResult.filePaths[0]) {
+        return { success: false, error: 'cancelled' };
+      }
+
+      const ext = format === 'mp3' ? 'mp3' : 'mp4';
+      const folder = folderResult.filePaths[0];
+      const results: { title: string; success: boolean; error?: string }[] = [];
+
+      for (const video of videos) {
+        const safeName = video.title.replace(/[/\\?%*:|"<>]/g, '_');
+        const filePath = resolve(folder, `${safeName}.${ext}`);
+        const result = await downloadOne(video.contentId, filePath, event.sender, format);
+        results.push({ title: video.title, success: result.success, error: result.error });
+      }
+
+      const successCount = results.filter((r) => r.success).length;
+      return { success: true, results, successCount, total: videos.length };
+    }
+  );
+
+  createWindow();
+
+  app.on('activate', function () {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+// lmsWin은 숨김 처리만 하므로 앱 종료 시 명시적으로 파괴
+app.on('before-quit', () => {
+  if (lmsWin && !lmsWin.isDestroyed()) {
+    lmsWin.removeAllListeners('close');
+    lmsWin.destroy();
+    lmsWin = null;
+  }
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
