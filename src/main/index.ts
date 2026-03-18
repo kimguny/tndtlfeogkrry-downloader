@@ -1,6 +1,6 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, session } from 'electron';
+import { app, shell, BrowserWindow, ipcMain, dialog, session, safeStorage } from 'electron';
 import { basename, dirname, extname, join, resolve } from 'path';
-import { createWriteStream, statSync } from 'fs';
+import { createWriteStream, statSync, readdirSync, readFileSync, writeFileSync, existsSync } from 'fs';
 import { unlink } from 'fs/promises';
 import https from 'https';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
@@ -8,12 +8,103 @@ import icon from '../../resources/icon.png?asset';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { XMLParser } from 'fast-xml-parser';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // asar 패키징 시 경로 보정
 const ffmpegPath = ffmpegInstaller.path.replace('app.asar', 'app.asar.unpacked');
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 const LMS_SESSION = 'persist:lms';
+
+// --- Gemini API 키 관리 (safeStorage 암호화) ---
+const API_KEY_FILE = join(app.getPath('userData'), 'gemini-key.enc');
+
+function saveGeminiApiKey(key: string): void {
+  const encrypted = safeStorage.encryptString(key);
+  writeFileSync(API_KEY_FILE, encrypted);
+}
+
+function loadGeminiApiKey(): string | null {
+  if (!existsSync(API_KEY_FILE)) return null;
+  try {
+    const encrypted = readFileSync(API_KEY_FILE);
+    return safeStorage.decryptString(encrypted);
+  } catch {
+    return null;
+  }
+}
+
+function deleteGeminiApiKey(): void {
+  if (existsSync(API_KEY_FILE)) {
+    writeFileSync(API_KEY_FILE, '');
+  }
+}
+
+// --- Gemini 변환 로직 ---
+async function transcribeOne(
+  mp3Path: string,
+  apiKey: string
+): Promise<string> {
+  const audioData = readFileSync(mp3Path);
+  const base64Audio = audioData.toString('base64');
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+  const result = await model.generateContent([
+    {
+      inlineData: {
+        mimeType: 'audio/mp3',
+        data: base64Audio
+      }
+    },
+    {
+      text: '이 오디오의 내용을 한국어 텍스트로 정확하게 받아적어주세요. 강의 내용이므로 전문 용어를 정확히 표기하고, 문단을 적절히 나눠주세요.'
+    }
+  ]);
+
+  return result.response.text();
+}
+
+async function transcribeWithRetry(
+  mp3Path: string,
+  apiKey: string,
+  maxRetries: number = 3
+): Promise<string> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await transcribeOne(mp3Path, apiKey);
+    } catch (err) {
+      const message = (err as Error).message || '';
+      // Rate limit (429) → 지수 백오프 재시도
+      if (message.includes('429') && attempt < maxRetries - 1) {
+        const delay = Math.pow(2, attempt) * 2000; // 2s, 4s, 8s
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('최대 재시도 횟수 초과');
+}
+
+// 분할 파일 그룹핑: "제목_part1.mp3" → { "제목": ["제목_part1.mp3", "제목_part2.mp3", ...] }
+function groupMp3Files(dirPath: string): Map<string, string[]> {
+  const files = readdirSync(dirPath).filter((f) => f.endsWith('.mp3')).sort();
+  const groups = new Map<string, string[]>();
+
+  for (const file of files) {
+    const partMatch = file.match(/^(.+)_part\d+\.mp3$/);
+    const baseName = partMatch ? partMatch[1] : file.replace(/\.mp3$/, '');
+
+    if (!groups.has(baseName)) {
+      groups.set(baseName, []);
+    }
+    groups.get(baseName)!.push(join(dirPath, file));
+  }
+
+  return groups;
+}
 
 // 로그인 세션을 유지하는 단일 BrowserWindow (숨김/표시 전환)
 let lmsWin: BrowserWindow | null = null;
@@ -651,6 +742,187 @@ app.whenReady().then(() => {
       return { success: true, results, successCount, total: videos.length };
     }
   );
+
+  // --- Gemini API 키 관리 핸들러 ---
+  ipcMain.handle('set-gemini-api-key', async (_event, key: string) => {
+    try {
+      saveGeminiApiKey(key);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle('get-gemini-api-key', async () => {
+    return { hasKey: loadGeminiApiKey() !== null };
+  });
+
+  ipcMain.handle('delete-gemini-api-key', async () => {
+    deleteGeminiApiKey();
+    return { success: true };
+  });
+
+  // --- 텍스트 변환 핸들러 ---
+  ipcMain.handle('transcribe-audio', async (event, filePath: string) => {
+    const apiKey = loadGeminiApiKey();
+    if (!apiKey) {
+      return { success: false, error: 'Gemini API 키가 설정되지 않았습니다.' };
+    }
+
+    try {
+      const dir = dirname(filePath);
+      const name = basename(filePath, extname(filePath));
+
+      // 분할 파일 감지: 원본 이름에서 _partN 패턴 확인
+      const partMatch = name.match(/^(.+)_part\d+$/);
+      const baseName = partMatch ? partMatch[1] : name;
+
+      // 같은 원본의 분할 파일 찾기
+      const allFiles = readdirSync(dir).filter((f) => f.endsWith('.mp3')).sort();
+      const partFiles = allFiles
+        .filter((f) => f.match(new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_part\\d+\\.mp3$`)))
+        .map((f) => join(dir, f));
+
+      const filesToTranscribe = partFiles.length > 0 ? partFiles : [filePath];
+      const totalParts = filesToTranscribe.length;
+      const texts: string[] = [];
+
+      for (let i = 0; i < filesToTranscribe.length; i++) {
+        event.sender.send('transcribe-progress', {
+          fileName: basename(filePath),
+          percent: Math.round((i / totalParts) * 90),
+          status: 'transcribing',
+          currentPart: i + 1,
+          totalParts
+        });
+
+        const text = await transcribeWithRetry(filesToTranscribe[i], apiKey);
+        texts.push(text);
+      }
+
+      // 병합
+      event.sender.send('transcribe-progress', {
+        fileName: basename(filePath),
+        percent: 95,
+        status: 'merging'
+      });
+
+      const mergedText = texts.join('\n\n');
+      const txtPath = join(dir, `${baseName}.txt`);
+      writeFileSync(txtPath, mergedText, 'utf-8');
+
+      event.sender.send('transcribe-progress', {
+        fileName: basename(filePath),
+        percent: 100,
+        status: 'done'
+      });
+
+      return { success: true, text: mergedText, txtPath };
+    } catch (err) {
+      const message = (err as Error).message;
+      event.sender.send('transcribe-progress', {
+        fileName: basename(filePath),
+        percent: 0,
+        status: 'error'
+      });
+
+      if (message.includes('401') || message.includes('403')) {
+        return { success: false, error: 'API 키가 유효하지 않습니다. 설정에서 다시 입력해주세요.' };
+      }
+      return { success: false, error: message };
+    }
+  });
+
+  ipcMain.handle('transcribe-batch', async (event, dirPath: string) => {
+    const apiKey = loadGeminiApiKey();
+    if (!apiKey) {
+      return { success: false, error: 'Gemini API 키가 설정되지 않았습니다.' };
+    }
+
+    const key = apiKey; // TS narrowing을 클로저에서도 유지
+    const groups = groupMp3Files(dirPath);
+    const groupEntries = Array.from(groups.entries());
+    const total = groupEntries.length;
+    const results: { fileName: string; success: boolean; error?: string }[] = [];
+
+    // 동시 2개 제한
+    let nextIndex = 0;
+    async function worker(): Promise<void> {
+      while (nextIndex < groupEntries.length) {
+        const i = nextIndex++;
+        const [baseName, files] = groupEntries[i];
+        const texts: string[] = [];
+
+        try {
+          for (let j = 0; j < files.length; j++) {
+            event.sender.send('transcribe-progress', {
+              fileName: `${baseName}.mp3`,
+              percent: Math.round((j / files.length) * 90),
+              status: 'transcribing',
+              currentPart: j + 1,
+              totalParts: files.length,
+              currentFile: i + 1,
+              totalFiles: total
+            });
+
+            const text = await transcribeWithRetry(files[j], key);
+            texts.push(text);
+          }
+
+          const mergedText = texts.join('\n\n');
+          const txtPath = join(dirPath, `${baseName}.txt`);
+          writeFileSync(txtPath, mergedText, 'utf-8');
+
+          event.sender.send('transcribe-progress', {
+            fileName: `${baseName}.mp3`,
+            percent: 100,
+            status: 'done',
+            currentFile: i + 1,
+            totalFiles: total
+          });
+
+          results.push({ fileName: baseName, success: true });
+        } catch (err) {
+          event.sender.send('transcribe-progress', {
+            fileName: `${baseName}.mp3`,
+            percent: 0,
+            status: 'error',
+            currentFile: i + 1,
+            totalFiles: total
+          });
+          results.push({ fileName: baseName, success: false, error: (err as Error).message });
+        }
+      }
+    }
+
+    const workers = Array.from({ length: Math.min(2, groupEntries.length) }, () => worker());
+    await Promise.all(workers);
+
+    const successCount = results.filter((r) => r.success).length;
+    return { success: true, results, successCount, total };
+  });
+
+  // 텍스트 파일 열기
+  ipcMain.handle('open-file', async (_event, filePath: string) => {
+    shell.openPath(filePath);
+    return { success: true };
+  });
+
+  // 폴더 선택 다이얼로그 (변환 시 다운로드 폴더 선택)
+  ipcMain.handle('select-folder', async (event) => {
+    const mainWin = BrowserWindow.fromWebContents(event.sender);
+    if (!mainWin) return { success: false };
+
+    const result = await dialog.showOpenDialog(mainWin, {
+      properties: ['openDirectory'],
+      title: 'MP3 파일이 있는 폴더 선택'
+    });
+
+    if (result.canceled || !result.filePaths[0]) {
+      return { success: false };
+    }
+    return { success: true, folderPath: result.filePaths[0] };
+  });
 
   createWindow();
 

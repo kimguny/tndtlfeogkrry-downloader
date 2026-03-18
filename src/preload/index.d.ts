@@ -54,6 +54,35 @@ interface DownloadApi {
     }) => void
   ) => void
   removeDownloadProgress: () => void
+
+  // Gemini STT
+  setGeminiApiKey: (key: string) => Promise<{ success: boolean; error?: string }>
+  getGeminiApiKey: () => Promise<{ hasKey: boolean }>
+  deleteGeminiApiKey: () => Promise<{ success: boolean }>
+  transcribeAudio: (
+    filePath: string
+  ) => Promise<{ success: boolean; text?: string; txtPath?: string; error?: string }>
+  transcribeBatch: (dirPath: string) => Promise<{
+    success: boolean
+    error?: string
+    results?: { fileName: string; success: boolean; error?: string }[]
+    successCount?: number
+    total?: number
+  }>
+  openFile: (filePath: string) => Promise<{ success: boolean }>
+  selectFolder: () => Promise<{ success: boolean; folderPath?: string }>
+  onTranscribeProgress: (
+    callback: (data: {
+      fileName: string
+      percent: number
+      status: 'transcribing' | 'merging' | 'done' | 'error'
+      currentPart?: number
+      totalParts?: number
+      currentFile?: number
+      totalFiles?: number
+    }) => void
+  ) => void
+  removeTranscribeProgress: () => void
 }
 
 declare global {

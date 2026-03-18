@@ -59,6 +59,54 @@ const api = {
 
   removeDownloadProgress: (): void => {
     ipcRenderer.removeAllListeners('download-progress')
+  },
+
+  // --- Gemini STT ---
+  setGeminiApiKey: (key: string): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke('set-gemini-api-key', key),
+
+  getGeminiApiKey: (): Promise<{ hasKey: boolean }> => ipcRenderer.invoke('get-gemini-api-key'),
+
+  deleteGeminiApiKey: (): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('delete-gemini-api-key'),
+
+  transcribeAudio: (
+    filePath: string
+  ): Promise<{ success: boolean; text?: string; txtPath?: string; error?: string }> =>
+    ipcRenderer.invoke('transcribe-audio', filePath),
+
+  transcribeBatch: (
+    dirPath: string
+  ): Promise<{
+    success: boolean
+    error?: string
+    results?: { fileName: string; success: boolean; error?: string }[]
+    successCount?: number
+    total?: number
+  }> => ipcRenderer.invoke('transcribe-batch', dirPath),
+
+  openFile: (filePath: string): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('open-file', filePath),
+
+  selectFolder: (): Promise<{ success: boolean; folderPath?: string }> =>
+    ipcRenderer.invoke('select-folder'),
+
+  onTranscribeProgress: (
+    callback: (data: {
+      fileName: string
+      percent: number
+      status: 'transcribing' | 'merging' | 'done' | 'error'
+      currentPart?: number
+      totalParts?: number
+      currentFile?: number
+      totalFiles?: number
+    }) => void
+  ): void => {
+    ipcRenderer.on('transcribe-progress', (_event, data) => callback(data))
+  },
+
+  removeTranscribeProgress: (): void => {
+    ipcRenderer.removeAllListeners('transcribe-progress')
   }
 }
 
