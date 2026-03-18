@@ -364,7 +364,7 @@ app.whenReady().then(() => {
       }
     }
 
-    // 직접 URL이 있는 경우 (video1 등)
+    // 직접 URL이 있는 경우
     if (mediaUriRaw) {
       if (
         typeof mediaUriRaw === 'string' &&
@@ -377,6 +377,12 @@ app.whenReady().then(() => {
         const valid = mediaUriRaw.find((u: string) => u && u.includes('.mp4') && !u.includes('['));
         if (valid) return valid;
       }
+    }
+
+    // video1 등: main_media.desktop.html5.media_uri 경로
+    const desktopUri = playingInfo.main_media?.desktop?.html5?.media_uri;
+    if (desktopUri && typeof desktopUri === 'string' && desktopUri.includes('.mp4')) {
+      return desktopUri;
     }
 
     // fallback: content_uri 기반 조합
@@ -496,6 +502,7 @@ app.whenReady().then(() => {
       }
 
       const xml = await response.text();
+      console.log('content.php XML 원본:', xml);
       const mediaUrl = extractMediaUrl(xml);
 
       console.log('content.php 결과 - mediaUrl:', mediaUrl);
