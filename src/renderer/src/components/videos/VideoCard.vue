@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Download, CheckCircle2, Loader2, Clock, HardDrive, Calendar } from 'lucide-vue-next'
+import { Download, CheckCircle2, Loader2, Clock, HardDrive, Calendar, FileText } from 'lucide-vue-next'
+import type { TranscribeStatus } from '../../composables/useTranscriber'
 import { computed } from 'vue'
 import type { VideoItem } from '../../types'
 
@@ -10,10 +11,14 @@ const props = defineProps<{
   status?: { status: string; splitCurrent?: number; splitTotal?: number }
   formatDuration: (seconds: number) => string
   formatSize: (bytes: number) => string
+  hasApiKey?: boolean
+  transcribeProgress?: number
+  transcribeStatus?: TranscribeStatus
 }>()
 
 const emit = defineEmits<{
   download: [video: VideoItem]
+  transcribe: [video: VideoItem]
 }>()
 
 const isComplete = computed(() => !props.isDownloading && props.progress === 100)
@@ -25,6 +30,26 @@ const statusLabel = computed(() => {
   if (props.status.status === 'split-done') return `${props.status.splitTotal}개 파일로 분할 완료`
   return null
 })
+
+const transcribeLabel = computed(() => {
+  if (!props.transcribeStatus) return null
+  if (props.transcribeStatus.status === 'transcribing') {
+    if (props.transcribeStatus.totalParts && props.transcribeStatus.totalParts > 1) {
+      return `텍스트 변환 중 (${props.transcribeStatus.currentPart}/${props.transcribeStatus.totalParts})`
+    }
+    return '텍스트 변환 중...'
+  }
+  if (props.transcribeStatus.status === 'merging') return '파트 병합 중...'
+  if (props.transcribeStatus.status === 'done') return '변환 완료'
+  if (props.transcribeStatus.status === 'error') return '변환 실패'
+  return null
+})
+
+const isTranscribing = computed(() =>
+  props.transcribeStatus?.status === 'transcribing' || props.transcribeStatus?.status === 'merging'
+)
+
+const isTranscribeDone = computed(() => props.transcribeStatus?.status === 'done')
 </script>
 
 <template>
@@ -71,14 +96,14 @@ const statusLabel = computed(() => {
     </div>
 
     <!-- Actions -->
-    <div class="relative z-10 flex items-center pl-4 border-l border-border/50 ml-2">
-      <div v-if="isComplete" class="flex flex-col items-center justify-center gap-1.5 text-success px-5 min-w-[100px]">
-        <CheckCircle2 :size="28" class="drop-shadow-sm" />
-        <span class="text-[11px] font-black uppercase tracking-widest">Done</span>
+    <div class="relative z-10 flex items-center gap-2 pl-4 border-l border-border/50 ml-2">
+      <div v-if="isComplete" class="flex flex-col items-center justify-center gap-1.5 px-3 min-w-[80px]">
+        <CheckCircle2 :size="28" class="text-success drop-shadow-sm" />
+        <span class="text-[11px] font-black uppercase tracking-widest text-success">Done</span>
         <span v-if="status?.status === 'split-done'" class="text-[10px] font-semibold text-text-3">{{ status.splitTotal }}개 분할</span>
       </div>
-      
-      <div v-else-if="isDownloading" class="flex flex-col items-center justify-center gap-1 px-5 min-w-[100px]">
+
+      <div v-else-if="isDownloading" class="flex flex-col items-center justify-center gap-1 px-3 min-w-[80px]">
         <div class="relative flex items-center justify-center w-12 h-12">
           <svg class="w-full h-full transform -rotate-90">
             <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="4" fill="none" class="text-surface-mute" />
@@ -88,7 +113,7 @@ const statusLabel = computed(() => {
         </div>
         <span v-if="statusLabel" class="text-[10px] font-semibold text-text-3 text-center whitespace-nowrap">{{ statusLabel }}</span>
       </div>
-      
+
       <button
         v-else
         class="w-12 h-12 flex items-center justify-center rounded-2xl bg-surface-mute text-text-2 hover:bg-primary hover:text-white transition-all duration-300 cursor-pointer shadow-sm hover:shadow-lg hover:shadow-primary/20 hover:-translate-y-0.5"
@@ -97,6 +122,34 @@ const statusLabel = computed(() => {
       >
         <Download :size="20" />
       </button>
+
+      <!-- 텍스트 변환 버튼 -->
+      <template v-if="isComplete && hasApiKey">
+        <div v-if="isTranscribeDone" class="flex flex-col items-center justify-center gap-1 px-3 min-w-[60px]">
+          <FileText :size="24" class="text-purple-500" />
+          <span class="text-[10px] font-bold text-purple-500 whitespace-nowrap">변환됨</span>
+        </div>
+
+        <div v-else-if="isTranscribing" class="flex flex-col items-center justify-center gap-1 px-3 min-w-[60px]">
+          <div class="relative flex items-center justify-center w-10 h-10">
+            <svg class="w-full h-full transform -rotate-90">
+              <circle cx="20" cy="20" r="16" stroke="currentColor" stroke-width="3" fill="none" class="text-surface-mute" />
+              <circle cx="20" cy="20" r="16" stroke="currentColor" stroke-width="3" fill="none" class="text-purple-500 transition-all duration-300" :stroke-dasharray="2 * Math.PI * 16" :stroke-dashoffset="2 * Math.PI * 16 * (1 - (transcribeProgress || 0) / 100)" stroke-linecap="round" />
+            </svg>
+            <Loader2 :size="14" class="absolute text-purple-500 animate-spin" />
+          </div>
+          <span v-if="transcribeLabel" class="text-[9px] font-semibold text-text-3 text-center whitespace-nowrap">{{ transcribeLabel }}</span>
+        </div>
+
+        <button
+          v-else
+          class="w-10 h-10 flex items-center justify-center rounded-xl bg-purple-500/10 text-purple-500 hover:bg-purple-500 hover:text-white transition-all duration-300 cursor-pointer shadow-sm hover:shadow-lg hover:shadow-purple-500/20 hover:-translate-y-0.5"
+          @click="emit('transcribe', video)"
+          title="텍스트 변환"
+        >
+          <FileText :size="18" />
+        </button>
+      </template>
     </div>
   </div>
 </template>

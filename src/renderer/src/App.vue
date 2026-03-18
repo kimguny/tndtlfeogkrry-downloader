@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { ref, onMounted, watch } from 'vue'
 import { useDownloader } from './composables/useDownloader'
+import { useTranscriber } from './composables/useTranscriber'
 import Sidebar from './components/layout/Sidebar.vue'
 import StatusMessage from './components/layout/StatusMessage.vue'
 import LoginScreen from './components/login/LoginScreen.vue'
 import CourseList from './components/courses/CourseList.vue'
 import VideoList from './components/videos/VideoList.vue'
+import ApiKeySettings from './components/settings/ApiKeySettings.vue'
 
 const {
   isLoggedIn,
@@ -27,11 +30,60 @@ const {
   formatDuration,
   formatSize
 } = useDownloader()
+
+const {
+  hasApiKey,
+  isTranscribingBatch,
+  transcribeProgressMap,
+  transcribeStatusMap,
+  transcribeMessage,
+  checkApiKey,
+  saveApiKey,
+  deleteApiKey,
+  transcribe,
+  transcribeBatch
+} = useTranscriber()
+
+const showSettings = ref(false)
+
+onMounted(() => {
+  checkApiKey()
+})
+
+// transcribeMessage가 있으면 message에 반영
+watch(transcribeMessage, (val) => {
+  if (val) message.value = val
+})
+
+async function handleTranscribe(video: { contentId: string; title: string }): Promise<void> {
+  // 다운로드된 파일 경로를 알 수 없으므로 폴더 선택
+  const result = await window.api.selectFolder()
+  if (!result.success || !result.folderPath) return
+
+  const safeName = video.title.replace(/[/\\?%*:|"<>]/g, '_')
+  const filePath = `${result.folderPath}/${safeName}.mp3`
+  await transcribe(filePath, `${safeName}.mp3`)
+}
+
+async function handleTranscribeAll(): Promise<void> {
+  const result = await window.api.selectFolder()
+  if (!result.success || !result.folderPath) return
+  await transcribeBatch(result.folderPath)
+}
+
+async function handleSaveApiKey(key: string): Promise<void> {
+  await saveApiKey(key)
+  showSettings.value = false
+}
+
+async function handleDeleteApiKey(): Promise<void> {
+  await deleteApiKey()
+}
 </script>
 
 <template>
   <div class="flex h-screen bg-surface text-text-1 transition-colors duration-200 overflow-hidden font-sans">
-    <Sidebar :is-logged-in="isLoggedIn" @login="login" />
+    <Sidebar :is-logged-in="isLoggedIn" :has-api-key="hasApiKey" @login="login" @open-settings="showSettings = true" />
 
     <main class="flex-1 flex flex-col h-full overflow-hidden relative">
       <div class="flex-1 overflow-y-auto px-10 py-10 w-full max-w-5xl mx-auto">
@@ -59,10 +111,16 @@ const {
                 :status-map="statusMap"
                 :format-duration="formatDuration"
                 :format-size="formatSize"
+                :has-api-key="hasApiKey"
+                :is-transcribing-batch="isTranscribingBatch"
+                :transcribe-progress-map="transcribeProgressMap"
+                :transcribe-status-map="transcribeStatusMap"
                 v-model:download-format="downloadFormat"
                 @back="goBackToCourses"
                 @download-all="downloadAll"
                 @download="download"
+                @transcribe="handleTranscribe"
+                @transcribe-all="handleTranscribeAll"
               />
             </Transition>
           </div>
@@ -74,6 +132,15 @@ const {
         <StatusMessage :message="message" />
       </div>
     </main>
+
+    <!-- API 키 설정 모달 -->
+    <ApiKeySettings
+      v-if="showSettings"
+      :has-api-key="hasApiKey"
+      @save="handleSaveApiKey"
+      @delete="handleDeleteApiKey"
+      @close="showSettings = false"
+    />
   </div>
 </template>
 

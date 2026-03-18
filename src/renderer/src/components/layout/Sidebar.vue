@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { Sun, Moon, Book, Download, Settings, LogIn } from 'lucide-vue-next'
+import { Sun, Moon, Book, LogIn, Key } from 'lucide-vue-next'
 import { useTheme } from '../../composables/useTheme'
 
 defineProps<{
   isLoggedIn: boolean
+  hasApiKey: boolean
 }>()
 
 const emit = defineEmits<{
   login: []
+  openSettings: []
 }>()
 
 const { isDark, toggleTheme } = useTheme()
@@ -32,10 +34,13 @@ const { isDark, toggleTheme } = useTheme()
         내 강의 목록
       </button>
 
-      <!-- 추후 다운로드 내역 탭 등 추가 가능 -->
-      <button class="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium text-text-2 hover:bg-surface-mute hover:text-text-1 transition-all opacity-40 cursor-not-allowed" title="준비 중">
-        <Download :size="19" />
-        다운로드 함
+      <button
+        class="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-medium text-text-2 hover:bg-surface-mute hover:text-text-1 transition-all"
+        @click="emit('openSettings')"
+      >
+        <Key :size="19" :class="hasApiKey ? 'text-purple-500' : ''" />
+        <span class="flex-1 text-left">Gemini API 설정</span>
+        <span v-if="hasApiKey" class="w-2 h-2 rounded-full bg-success"></span>
       </button>
     </nav>
 
