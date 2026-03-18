@@ -1,10 +1,13 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, session } from 'electron';
 import { join, resolve } from 'path';
+import { createWriteStream } from 'fs';
 import { unlink } from 'fs/promises';
+import https from 'https';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import { XMLParser } from 'fast-xml-parser';
 
 // asar 패키징 시 경로 보정
 const ffmpegPath = ffmpegInstaller.path.replace('app.asar', 'app.asar.unpacked');
@@ -260,6 +263,143 @@ app.whenReady().then(() => {
     });
   }
 
+  const xmlParser = new XMLParser({ ignoreAttributes: true });
+
+  // content.php XML에서 영상 URL 추출
+  function extractMediaUrl(xml: string): string | null {
+    const parsed = xmlParser.parse(xml);
+    const content = parsed?.content;
+    if (!content) return null;
+
+    const playingInfo = content.content_playing_info;
+    if (!playingInfo) return null;
+
+    // 파일명 추출 (story_list 또는 직접)
+    const story = playingInfo.story_list?.story;
+    const fileName: string | undefined =
+      story?.main_media_list?.main_media || playingInfo.main_media_list?.main_media;
+
+    // media_uri 템플릿 추출 (service_root.media 또는 직접)
+    const mediaUriRaw =
+      content.service_root?.media?.media_uri || playingInfo.media_uri || content.media_uri;
+
+    // [MEDIA_FILE] 치환 방식
+    if (fileName && mediaUriRaw) {
+      const template = Array.isArray(mediaUriRaw) ? mediaUriRaw[0] : mediaUriRaw;
+      if (typeof template === 'string' && template.includes('[MEDIA_FILE]')) {
+        return template.replace('[MEDIA_FILE]', fileName);
+      }
+    }
+
+    // 직접 URL이 있는 경우 (video1 등)
+    if (mediaUriRaw) {
+      if (
+        typeof mediaUriRaw === 'string' &&
+        mediaUriRaw.includes('.mp4') &&
+        !mediaUriRaw.includes('[')
+      ) {
+        return mediaUriRaw;
+      }
+      if (Array.isArray(mediaUriRaw)) {
+        const valid = mediaUriRaw.find((u: string) => u && u.includes('.mp4') && !u.includes('['));
+        if (valid) return valid;
+      }
+    }
+
+    // fallback: content_uri 기반 조합
+    if (fileName) {
+      const contentUri = playingInfo.content_uri;
+      if (contentUri) {
+        const base = String(contentUri).replace(/web_files$/, 'media_files');
+        return base + '/' + fileName;
+      }
+    }
+
+    return null;
+  }
+
+  // Node.js https로 파일 다운로드 (진행률 추적)
+  function downloadFile(
+    url: string,
+    savePath: string,
+    contentId: string,
+    sender: Electron.WebContents,
+    progressMultiplier: number = 100
+  ): Promise<{ success: boolean; error?: string }> {
+    return new Promise((resolve) => {
+      const req = https.get(
+        url,
+        {
+          headers: {
+            Referer: 'https://commons.ssu.ac.kr/',
+            Origin: 'https://commons.ssu.ac.kr'
+          }
+        },
+        (res) => {
+          // 리다이렉트 처리
+          if (
+            res.statusCode &&
+            res.statusCode >= 300 &&
+            res.statusCode < 400 &&
+            res.headers.location
+          ) {
+            res.resume();
+            downloadFile(
+              res.headers.location,
+              savePath,
+              contentId,
+              sender,
+              progressMultiplier
+            ).then(resolve);
+            return;
+          }
+
+          if (res.statusCode !== 200) {
+            res.resume();
+            resolve({ success: false, error: `다운로드 HTTP ${res.statusCode}` });
+            return;
+          }
+
+          const total = Number(res.headers['content-length'] || 0);
+          const fileStream = createWriteStream(savePath);
+          let received = 0;
+
+          res.on('data', (chunk: Buffer) => {
+            received += chunk.length;
+            if (total > 0) {
+              sender.send('download-progress', {
+                contentId,
+                downloaded: received,
+                total,
+                percent: Math.round((received / total) * progressMultiplier)
+              });
+            }
+          });
+
+          res.pipe(fileStream);
+
+          fileStream.on('finish', () => {
+            console.log(`다운로드 완료: ${savePath}, ${received} bytes`);
+            resolve({ success: true });
+          });
+
+          fileStream.on('error', (err) => {
+            resolve({ success: false, error: `파일 쓰기 실패: ${err.message}` });
+          });
+        }
+      );
+
+      req.on('error', (err) => {
+        resolve({ success: false, error: `다운로드 실패: ${err.message}` });
+      });
+
+      req.setTimeout(300000, () => {
+        req.destroy();
+        resolve({ success: false, error: '다운로드 타임아웃 (5분)' });
+      });
+    });
+  }
+
   // 단일 비디오 다운로드 공통 로직
   async function downloadOne(
     contentId: string,
@@ -267,116 +407,49 @@ app.whenReady().then(() => {
     sender: Electron.WebContents,
     format: 'mp4' | 'mp3' = 'mp4'
   ): Promise<{ success: boolean; error?: string; filePath?: string }> {
-    const lmsSession = getLmsSession();
-
-    const contentApiUrl = `https://commons.ssu.ac.kr/viewer/ssplayer/uniplayer_support/content.php?content_id=${contentId}&_=${Date.now()}`;
-    const dlWin = new BrowserWindow({
-      show: false,
-      webPreferences: { session: lmsSession }
-    });
-
     try {
-      await dlWin.loadURL(`https://commons.ssu.ac.kr/em/${contentId}`);
+      // content.php API로 영상 URL 조회 (세션 쿠키 자동 포함)
+      const contentApiUrl = `https://commons.ssu.ac.kr/viewer/ssplayer/uniplayer_support/content.php?content_id=${contentId}&_=${Date.now()}`;
+      const lmsSession = getLmsSession();
+      const response = await lmsSession.fetch(contentApiUrl, {
+        headers: {
+          Referer: 'https://commons.ssu.ac.kr/',
+          Origin: 'https://commons.ssu.ac.kr'
+        }
+      });
 
-      const result = await dlWin.webContents.executeJavaScript(`
-        (async () => {
-          const res = await fetch('${contentApiUrl}', { credentials: 'include' });
-          const status = res.status;
-          const xml = await res.text();
-          if (!res.ok) return { error: 'HTTP ' + status, xml };
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(xml, 'text/xml');
-          const contentType = doc.querySelector('content_type')?.textContent?.trim();
+      if (!response.ok) {
+        throw new Error(`content.php HTTP ${response.status}`);
+      }
 
-          if (contentType === 'video1') {
-            const mediaUri = doc.querySelector('desktop > html5 > media_uri');
-            return { xml, mediaUrl: mediaUri?.textContent?.trim() || null };
-          } else if (contentType === 'upf') {
-            const fileName = doc.querySelector('main_media_list > main_media')?.textContent?.trim();
-            const mediaUriTemplate = doc.querySelector('media_uri')?.textContent?.trim();
-            if (fileName && mediaUriTemplate) {
-              return { xml, mediaUrl: mediaUriTemplate.replace('[MEDIA_FILE]', fileName) };
-            }
-            if (fileName) {
-              const contentUri = doc.querySelector('content_uri')?.textContent?.trim();
-              if (contentUri) {
-                const base = contentUri.replace(/web_files$/, 'media_files');
-                return { xml, mediaUrl: base + '/' + fileName };
-              }
-            }
-            return { xml, mediaUrl: null };
-          } else {
-            const allUris = [...doc.querySelectorAll('media_uri')].map(el => el.textContent?.trim());
-            const valid = allUris.find(u => u && u.includes('.mp4') && !u.includes('['));
-            return { xml, mediaUrl: valid || null };
-          }
-        })()
-      `);
+      const xml = await response.text();
+      const mediaUrl = extractMediaUrl(xml);
 
-      console.log('content.php 결과 - mediaUrl:', result.mediaUrl);
-      if (result.error) throw new Error('content.php ' + result.error);
-      if (!result.mediaUrl) {
-        const m = result.xml?.match(/<content_type>([^<]+)<\/content_type>/);
+      console.log('content.php 결과 - mediaUrl:', mediaUrl);
+
+      if (!mediaUrl) {
+        const m = xml.match(/<content_type>([^<]+)<\/content_type>/);
         throw new Error(`다운로드할 수 없는 콘텐츠 형식입니다 (${m?.[1] || '알 수 없음'})`);
       }
 
-      const videoUrl = result.mediaUrl;
-      console.log('비디오 URL:', videoUrl);
-
-      // Referer 헤더 주입
-      const filter = { urls: ['https://ssuin-object.commonscdn.com/*'] };
-      lmsSession.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
-        details.requestHeaders['Referer'] = 'https://commons.ssu.ac.kr/';
-        details.requestHeaders['Origin'] = 'https://commons.ssu.ac.kr';
-        callback({ requestHeaders: details.requestHeaders });
-      });
+      console.log('비디오 URL:', mediaUrl);
 
       // 다운로드 (MP3인 경우 임시 MP4로 먼저 받고 변환)
       const actualSavePath = format === 'mp3' ? filePath.replace(/\.mp3$/, '.tmp.mp4') : filePath;
+      const progressMultiplier = format === 'mp3' ? 90 : 100;
 
-      const dlResult = await new Promise<{ success: boolean; error?: string; filePath?: string }>((dlResolve) => {
-        const onWillDownload = (_e: Electron.Event, item: Electron.DownloadItem): void => {
-          item.setSavePath(actualSavePath);
+      const dlResult = await downloadFile(
+        mediaUrl,
+        actualSavePath,
+        contentId,
+        sender,
+        progressMultiplier
+      );
 
-          item.on('updated', (_e, state) => {
-            if (state === 'progressing' && !item.isPaused()) {
-              const received = item.getReceivedBytes();
-              const total = item.getTotalBytes();
-              if (total > 0) {
-                sender.send('download-progress', {
-                  contentId,
-                  downloaded: received,
-                  total,
-                  percent: format === 'mp3' ? Math.round((received / total) * 90) : Math.round((received / total) * 100)
-                });
-              }
-            }
-          });
-
-          item.once('done', (_e, state) => {
-            lmsSession.removeListener('will-download', onWillDownload);
-            if (!dlWin.isDestroyed()) dlWin.destroy();
-            if (state === 'completed') {
-              dlResolve({ success: true, filePath: actualSavePath });
-            } else {
-              dlResolve({ success: false, error: `다운로드 ${state}` });
-            }
-          });
-        };
-
-        lmsSession.on('will-download', onWillDownload);
-        dlWin.webContents.downloadURL(videoUrl);
-
-        setTimeout(() => {
-          if (!dlWin.isDestroyed()) {
-            lmsSession.removeListener('will-download', onWillDownload);
-            dlWin.destroy();
-            dlResolve({ success: false, error: '다운로드 타임아웃 (5분)' });
-          }
-        }, 300000);
-      });
-
-      if (!dlResult.success) return dlResult;
+      if (!dlResult.success) {
+        console.error(`다운로드 실패 [${contentId}]:`, dlResult.error);
+        return dlResult;
+      }
 
       // MP3 변환
       if (format === 'mp3') {
@@ -392,37 +465,47 @@ app.whenReady().then(() => {
         }
       }
 
-      return dlResult;
+      return { success: true, filePath };
     } catch (err) {
-      if (!dlWin.isDestroyed()) dlWin.destroy();
+      console.error(`downloadOne 에러 [${contentId}]:`, (err as Error).message);
       return { success: false, error: (err as Error).message };
     }
   }
 
   // 비디오 다운로드 (개별)
-  ipcMain.handle('download-video', async (event, contentId: string, title: string, format: 'mp4' | 'mp3' = 'mp4') => {
-    const mainWin = BrowserWindow.fromWebContents(event.sender);
-    if (!mainWin) return { success: false, error: 'No window found' };
+  ipcMain.handle(
+    'download-video',
+    async (event, contentId: string, title: string, format: 'mp4' | 'mp3' = 'mp4') => {
+      const mainWin = BrowserWindow.fromWebContents(event.sender);
+      if (!mainWin) return { success: false, error: 'No window found' };
 
-    const safeName = title.replace(/[/\\?%*:|"<>]/g, '_');
-    const ext = format === 'mp3' ? 'mp3' : 'mp4';
-    const filterName = format === 'mp3' ? 'Audio' : 'Video';
-    const saveResult = await dialog.showSaveDialog(mainWin, {
-      defaultPath: `${safeName}.${ext}`,
-      filters: [{ name: filterName, extensions: [ext] }]
-    });
+      const safeName = title.replace(/[/\\?%*:|"<>]/g, '_');
+      const ext = format === 'mp3' ? 'mp3' : 'mp4';
+      const filterName = format === 'mp3' ? 'Audio' : 'Video';
+      const saveResult = await dialog.showSaveDialog(mainWin, {
+        defaultPath: `${safeName}.${ext}`,
+        filters: [{ name: filterName, extensions: [ext] }]
+      });
 
-    if (saveResult.canceled || !saveResult.filePath) {
-      return { success: false, error: 'cancelled' };
+      if (saveResult.canceled || !saveResult.filePath) {
+        return { success: false, error: 'cancelled' };
+      }
+
+      return downloadOne(contentId, saveResult.filePath, event.sender, format);
     }
+  );
 
-    return downloadOne(contentId, saveResult.filePath, event.sender, format);
-  });
+  // 동시 다운로드 개수 제한 (최대 3개)
+  const MAX_CONCURRENT = 3;
 
-  // 전체 다운로드
+  // 전체 다운로드 (병렬)
   ipcMain.handle(
     'download-all',
-    async (event, videos: { contentId: string; title: string }[], format: 'mp4' | 'mp3' = 'mp4') => {
+    async (
+      event,
+      videos: { contentId: string; title: string }[],
+      format: 'mp4' | 'mp3' = 'mp4'
+    ) => {
       const mainWin = BrowserWindow.fromWebContents(event.sender);
       if (!mainWin) return { success: false, error: 'No window found' };
 
@@ -437,14 +520,27 @@ app.whenReady().then(() => {
 
       const ext = format === 'mp3' ? 'mp3' : 'mp4';
       const folder = folderResult.filePaths[0];
-      const results: { title: string; success: boolean; error?: string }[] = [];
+      const results: { title: string; success: boolean; error?: string }[] = new Array(
+        videos.length
+      );
 
-      for (const video of videos) {
-        const safeName = video.title.replace(/[/\\?%*:|"<>]/g, '_');
-        const filePath = resolve(folder, `${safeName}.${ext}`);
-        const result = await downloadOne(video.contentId, filePath, event.sender, format);
-        results.push({ title: video.title, success: result.success, error: result.error });
+      // 병렬 큐: 최대 MAX_CONCURRENT개 동시 다운로드
+      let nextIndex = 0;
+      async function worker(): Promise<void> {
+        while (nextIndex < videos.length) {
+          const i = nextIndex++;
+          const video = videos[i];
+          const safeName = video.title.replace(/[/\\?%*:|"<>]/g, '_');
+          const filePath = resolve(folder, `${safeName}.${ext}`);
+          const result = await downloadOne(video.contentId, filePath, event.sender, format);
+          results[i] = { title: video.title, success: result.success, error: result.error };
+        }
       }
+
+      const workers = Array.from({ length: Math.min(MAX_CONCURRENT, videos.length) }, () =>
+        worker()
+      );
+      await Promise.all(workers);
 
       const successCount = results.filter((r) => r.success).length;
       return { success: true, results, successCount, total: videos.length };
