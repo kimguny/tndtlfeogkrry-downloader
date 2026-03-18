@@ -38,14 +38,14 @@ jobs:
 
       - name: Build and Publish (macOS)
         if: matrix.os == 'macos-latest'
-        run: pnpm build && electron-builder --mac --publish always
+        run: pnpm build && pnpm exec electron-builder --mac --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         timeout-minutes: 10
 
       - name: Build and Publish (Windows)
         if: matrix.os == 'windows-latest'
-        run: pnpm build && electron-builder --win --publish always
+        run: pnpm build && pnpm exec electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         timeout-minutes: 10
