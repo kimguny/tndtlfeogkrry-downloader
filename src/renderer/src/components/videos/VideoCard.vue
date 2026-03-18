@@ -7,6 +7,7 @@ const props = defineProps<{
   video: VideoItem
   isDownloading: boolean
   progress: number | undefined
+  status?: { status: string; splitCurrent?: number; splitTotal?: number }
   formatDuration: (seconds: number) => string
   formatSize: (bytes: number) => string
 }>()
@@ -16,6 +17,14 @@ const emit = defineEmits<{
 }>()
 
 const isComplete = computed(() => !props.isDownloading && props.progress === 100)
+
+const statusLabel = computed(() => {
+  if (!props.status) return null
+  if (props.status.status === 'converting') return 'MP3 변환 중...'
+  if (props.status.status === 'splitting') return `MP3 분할 중 (${props.status.splitCurrent}/${props.status.splitTotal})`
+  if (props.status.status === 'split-done') return `${props.status.splitTotal}개 파일로 분할 완료`
+  return null
+})
 </script>
 
 <template>
@@ -66,6 +75,7 @@ const isComplete = computed(() => !props.isDownloading && props.progress === 100
       <div v-if="isComplete" class="flex flex-col items-center justify-center gap-1.5 text-success px-5 min-w-[100px]">
         <CheckCircle2 :size="28" class="drop-shadow-sm" />
         <span class="text-[11px] font-black uppercase tracking-widest">Done</span>
+        <span v-if="status?.status === 'split-done'" class="text-[10px] font-semibold text-text-3">{{ status.splitTotal }}개 분할</span>
       </div>
       
       <div v-else-if="isDownloading" class="flex flex-col items-center justify-center gap-1 px-5 min-w-[100px]">
@@ -76,6 +86,7 @@ const isComplete = computed(() => !props.isDownloading && props.progress === 100
           </svg>
           <span class="absolute text-[11px] font-black text-text-1 tracking-tighter">{{ Math.round(progress || 0) }}%</span>
         </div>
+        <span v-if="statusLabel" class="text-[10px] font-semibold text-text-3 text-center whitespace-nowrap">{{ statusLabel }}</span>
       </div>
       
       <button

@@ -10,6 +10,7 @@ defineProps<{
   isDownloadingAll: boolean
   downloadingIds: Set<string>
   progressMap: Record<string, number>
+  statusMap: Record<string, { status: string; splitCurrent?: number; splitTotal?: number }>
   formatDuration: (seconds: number) => string
   formatSize: (bytes: number) => string
 }>()
@@ -73,6 +74,7 @@ const emit = defineEmits<{
         :video="video"
         :is-downloading="downloadingIds.has(video.contentId)"
         :progress="progressMap[video.contentId]"
+        :status="statusMap[video.contentId]"
         :format-duration="formatDuration"
         :format-size="formatSize"
         @download="emit('download', $event)"

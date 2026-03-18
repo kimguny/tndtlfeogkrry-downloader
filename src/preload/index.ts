@@ -49,6 +49,9 @@ const api = {
       downloaded: number
       total: number
       percent: number
+      status?: 'converting' | 'splitting' | 'split-done' | 'done'
+      splitCurrent?: number
+      splitTotal?: number
     }) => void
   ): void => {
     ipcRenderer.on('download-progress', (_event, data) => callback(data))

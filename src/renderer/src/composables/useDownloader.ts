@@ -9,12 +9,20 @@ const isLoading = ref(false)
 const message = ref('')
 const downloadingIds = ref<Set<string>>(new Set())
 const progressMap = ref<Record<string, number>>({})
+const statusMap = ref<Record<string, { status: string; splitCurrent?: number; splitTotal?: number }>>({})
 const downloadFormat = ref<'mp4' | 'mp3'>('mp4')
 const isDownloadingAll = ref(false)
 
 export function useDownloader() {
   window.api.onDownloadProgress((data) => {
     progressMap.value[data.contentId] = data.percent
+    if (data.status) {
+      statusMap.value[data.contentId] = {
+        status: data.status,
+        splitCurrent: data.splitCurrent,
+        splitTotal: data.splitTotal
+      }
+    }
   })
 
   onUnmounted(() => {
@@ -166,6 +174,7 @@ export function useDownloader() {
     message,
     downloadingIds,
     progressMap,
+    statusMap,
     downloadFormat,
     isDownloadingAll,
     login,

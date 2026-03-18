@@ -15,6 +15,7 @@ const {
   message,
   downloadingIds,
   progressMap,
+  statusMap,
   downloadFormat,
   isDownloadingAll,
   login,
@@ -55,6 +56,7 @@ const {
                 :is-downloading-all="isDownloadingAll"
                 :downloading-ids="downloadingIds"
                 :progress-map="progressMap"
+                :status-map="statusMap"
                 :format-duration="formatDuration"
                 :format-size="formatSize"
                 v-model:download-format="downloadFormat"

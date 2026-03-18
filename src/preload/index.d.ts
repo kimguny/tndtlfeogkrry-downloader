@@ -48,6 +48,9 @@ interface DownloadApi {
       downloaded: number
       total: number
       percent: number
+      status?: 'converting' | 'splitting' | 'split-done' | 'done'
+      splitCurrent?: number
+      splitTotal?: number
     }) => void
   ) => void
   removeDownloadProgress: () => void

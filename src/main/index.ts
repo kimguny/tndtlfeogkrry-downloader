@@ -1,6 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, session } from 'electron';
-import { join, resolve } from 'path';
-import { createWriteStream } from 'fs';
+import { basename, dirname, extname, join, resolve } from 'path';
+import { createWriteStream, statSync } from 'fs';
 import { unlink } from 'fs/promises';
 import https from 'https';
 import { electronApp, optimizer, is } from '@electron-toolkit/utils';
@@ -263,6 +263,79 @@ app.whenReady().then(() => {
     });
   }
 
+  // MP3 파일의 오디오 길이(초) 조회
+  function getAudioDuration(filePath: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(filePath, (err, metadata) => {
+        if (err) return reject(err);
+        resolve(metadata.format.duration || 0);
+      });
+    });
+  }
+
+  // 29MB 기준 MP3 파일 분할
+  const SPLIT_THRESHOLD = 19 * 1024 * 1024; // 19MB
+
+  async function splitMp3(
+    mp3Path: string,
+    contentId: string,
+    sender: Electron.WebContents
+  ): Promise<string[]> {
+    const fileSize = statSync(mp3Path).size;
+    if (fileSize <= SPLIT_THRESHOLD) return [mp3Path];
+
+    const duration = await getAudioDuration(mp3Path);
+    // 19MB 기준으로 분할 수 계산 (여유분 확보)
+    const partCount = Math.ceil(fileSize / (19 * 1024 * 1024));
+    const partDuration = duration / partCount;
+
+    const dir = dirname(mp3Path);
+    const name = basename(mp3Path, extname(mp3Path));
+    const parts: string[] = [];
+
+    for (let i = 0; i < partCount; i++) {
+      const partPath = join(dir, `${name}_part${i + 1}.mp3`);
+      const startTime = i * partDuration;
+
+      sender.send('download-progress', {
+        contentId,
+        downloaded: i,
+        total: partCount,
+        percent: 96 + Math.round((i / partCount) * 4), // 96~100%
+        status: `splitting`,
+        splitCurrent: i + 1,
+        splitTotal: partCount
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(mp3Path)
+          .setStartTime(startTime)
+          .setDuration(partDuration)
+          .audioCodec('copy')
+          .output(partPath)
+          .on('end', () => resolve())
+          .on('error', (err) => reject(err))
+          .run();
+      });
+
+      parts.push(partPath);
+    }
+
+    // 분할 완료 후 원본 삭제
+    await unlink(mp3Path);
+
+    sender.send('download-progress', {
+      contentId,
+      downloaded: partCount,
+      total: partCount,
+      percent: 100,
+      status: 'split-done',
+      splitTotal: partCount
+    });
+
+    return parts;
+  }
+
   const xmlParser = new XMLParser({ ignoreAttributes: true });
 
   // content.php XML에서 영상 URL 추출
@@ -451,17 +524,42 @@ app.whenReady().then(() => {
         return dlResult;
       }
 
-      // MP3 변환
+      // MP3 변환 + 20MB 초과 시 자동 분할
       if (format === 'mp3') {
         try {
-          sender.send('download-progress', { contentId, downloaded: 0, total: 0, percent: 95 });
+          sender.send('download-progress', {
+            contentId,
+            downloaded: 0,
+            total: 0,
+            percent: 92,
+            status: 'converting'
+          });
           await convertToMp3(actualSavePath, filePath);
           await unlink(actualSavePath);
-          sender.send('download-progress', { contentId, downloaded: 0, total: 0, percent: 100 });
+          sender.send('download-progress', {
+            contentId,
+            downloaded: 0,
+            total: 0,
+            percent: 95,
+            status: 'converting'
+          });
+
+          // 20MB 초과 시 분할
+          const parts = await splitMp3(filePath, contentId, sender);
+          const wasSplit = parts.length > 1;
+
+          sender.send('download-progress', {
+            contentId,
+            downloaded: 0,
+            total: 0,
+            percent: 100,
+            status: wasSplit ? 'split-done' : 'done',
+            splitTotal: wasSplit ? parts.length : undefined
+          });
           return { success: true, filePath };
         } catch (err) {
           await unlink(actualSavePath).catch(() => {});
-          return { success: false, error: `MP3 변환 실패: ${(err as Error).message}` };
+          return { success: false, error: `MP3 변환/분할 실패: ${(err as Error).message}` };
         }
       }
 
