@@ -23,20 +23,22 @@ const api = {
   downloadVideo: (
     contentId: string,
     title: string,
-    format?: 'mp4' | 'mp3'
+    format?: 'mp4' | 'mp3',
+    folderPath?: string
   ): Promise<{ success: boolean; error?: string; filePath?: string }> =>
-    ipcRenderer.invoke(IPC.DOWNLOAD_VIDEO, contentId, title, format || 'mp4'),
+    ipcRenderer.invoke(IPC.DOWNLOAD_VIDEO, contentId, title, format || 'mp4', folderPath),
 
   downloadAll: (
     videos: VideoRef[],
-    format?: 'mp4' | 'mp3'
+    format?: 'mp4' | 'mp3',
+    folderPath?: string
   ): Promise<{
     success: boolean
     error?: string
-    results?: { title: string; success: boolean; error?: string }[]
+    results?: { title: string; contentId: string; success: boolean; error?: string; filePath?: string }[]
     successCount?: number
     total?: number
-  }> => ipcRenderer.invoke(IPC.DOWNLOAD_ALL, videos, format || 'mp4'),
+  }> => ipcRenderer.invoke(IPC.DOWNLOAD_ALL, videos, format || 'mp4', folderPath),
 
   onDownloadProgress: (callback: (data: DownloadProgressData) => void): void => {
     ipcRenderer.on(IPC_EVENT.DOWNLOAD_PROGRESS, (_event, data) => callback(data))
@@ -76,15 +78,19 @@ const api = {
   selectFolder: (): Promise<{ success: boolean; folderPath?: string }> =>
     ipcRenderer.invoke(IPC.SELECT_FOLDER),
 
+  selectDownloadFolder: (): Promise<{ success: boolean; folderPath?: string }> =>
+    ipcRenderer.invoke(IPC.SELECT_DOWNLOAD_FOLDER),
+
   downloadAndTranscribeAll: (
-    videos: VideoRef[]
+    videos: VideoRef[],
+    folderPath?: string
   ): Promise<{
     success: boolean
     error?: string
     downloadSuccessCount?: number
     transcribeSuccessCount?: number
     total?: number
-  }> => ipcRenderer.invoke(IPC.DOWNLOAD_AND_TRANSCRIBE_ALL, videos),
+  }> => ipcRenderer.invoke(IPC.DOWNLOAD_AND_TRANSCRIBE_ALL, videos, folderPath),
 
   onTranscribeProgress: (callback: (data: TranscribeProgressData) => void): void => {
     ipcRenderer.on(IPC_EVENT.TRANSCRIBE_PROGRESS, (_event, data) => callback(data))

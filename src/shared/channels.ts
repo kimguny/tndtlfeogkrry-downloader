@@ -12,7 +12,8 @@ export const IPC = {
   TRANSCRIBE_BATCH: 'transcribe-batch',
   DOWNLOAD_AND_TRANSCRIBE_ALL: 'download-and-transcribe-all',
   OPEN_FILE: 'open-file',
-  SELECT_FOLDER: 'select-folder'
+  SELECT_FOLDER: 'select-folder',
+  SELECT_DOWNLOAD_FOLDER: 'select-download-folder'
 } as const
 
 /** ipcMain.send / ipcRenderer.on 이벤트 채널명 */

@@ -22,15 +22,17 @@ interface DownloadApi {
   downloadVideo: (
     contentId: string,
     title: string,
-    format?: 'mp4' | 'mp3'
+    format?: 'mp4' | 'mp3',
+    folderPath?: string
   ) => Promise<{ success: boolean; error?: string; filePath?: string }>
   downloadAll: (
     videos: VideoRef[],
-    format?: 'mp4' | 'mp3'
+    format?: 'mp4' | 'mp3',
+    folderPath?: string
   ) => Promise<{
     success: boolean
     error?: string
-    results?: { title: string; success: boolean; error?: string }[]
+    results?: { title: string; contentId: string; success: boolean; error?: string; filePath?: string }[]
     successCount?: number
     total?: number
   }>
@@ -53,8 +55,10 @@ interface DownloadApi {
   }>
   openFile: (filePath: string) => Promise<{ success: boolean }>
   selectFolder: () => Promise<{ success: boolean; folderPath?: string }>
+  selectDownloadFolder: () => Promise<{ success: boolean; folderPath?: string }>
   downloadAndTranscribeAll: (
-    videos: VideoRef[]
+    videos: VideoRef[],
+    folderPath?: string
   ) => Promise<{
     success: boolean
     error?: string

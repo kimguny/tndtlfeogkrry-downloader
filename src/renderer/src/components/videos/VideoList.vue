@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowLeft, Download, Loader2, PlaySquare, FileText } from 'lucide-vue-next'
+import { ArrowLeft, Download, Loader2, PlaySquare, FileText, FolderOpen, X } from 'lucide-vue-next'
 import type { VideoItem } from '../../types'
 import type { TranscribeStatus } from '../../composables/useTranscriber'
 import FormatToggle from './FormatToggle.vue'
@@ -18,6 +18,7 @@ defineProps<{
   isTranscribingBatch?: boolean
   transcribeProgressMap?: Record<string, number>
   transcribeStatusMap?: Record<string, TranscribeStatus>
+  downloadFolder?: string | null
 }>()
 
 const downloadFormat = defineModel<'mp4' | 'mp3'>('downloadFormat', { required: true })
@@ -28,6 +29,8 @@ const emit = defineEmits<{
   download: [video: VideoItem]
   transcribe: [video: VideoItem]
   transcribeAll: []
+  selectFolder: []
+  clearFolder: []
 }>()
 </script>
 
@@ -74,6 +77,32 @@ const emit = defineEmits<{
           {{ isTranscribingBatch ? '변환 중...' : '전체 텍스트 변환' }}
         </button>
       </div>
+    </div>
+
+    <!-- Folder Selection -->
+    <div class="flex items-center gap-3 mb-6 px-1">
+      <button
+        class="flex items-center gap-2 px-4 py-2 rounded-xl border border-border text-sm font-medium cursor-pointer bg-surface-mute text-text-2 hover:bg-surface-hover hover:text-text-1 transition-all shrink-0"
+        @click="emit('selectFolder')"
+      >
+        <FolderOpen :size="16" />
+        폴더 선택
+      </button>
+      <div v-if="downloadFolder" class="flex items-center gap-2 min-w-0 flex-1">
+        <span class="text-sm text-text-2 truncate" :title="downloadFolder">
+          {{ downloadFolder }}
+        </span>
+        <button
+          class="p-1 rounded-lg border-none cursor-pointer bg-transparent text-text-3 hover:bg-surface-mute hover:text-text-1 transition-all shrink-0"
+          @click="emit('clearFolder')"
+          title="폴더 선택 해제"
+        >
+          <X :size="14" />
+        </button>
+      </div>
+      <span v-else class="text-sm text-text-3">
+        폴더를 선택하지 않으면 다운로드 시 매번 선택합니다
+      </span>
     </div>
 
     <!-- Empty State -->

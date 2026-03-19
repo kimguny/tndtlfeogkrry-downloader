@@ -11,6 +11,8 @@ const downloadingIds = ref<Set<string>>(new Set())
 const progressMap = ref<Record<string, number>>({})
 const statusMap = ref<Record<string, { status: string; splitCurrent?: number; splitTotal?: number }>>({})
 const downloadFormat = ref<'mp4' | 'mp3'>('mp4')
+const downloadFolder = ref<string | null>(null)
+const downloadedPaths = ref<Record<string, string>>({})
 const isDownloadingAll = ref(false)
 
 export function useDownloader() {
@@ -92,7 +94,19 @@ export function useDownloader() {
     selectedCourseId.value = null
     videos.value = []
     progressMap.value = {}
+    downloadedPaths.value = {}
     message.value = ''
+  }
+
+  async function selectDownloadFolder(): Promise<void> {
+    const result = await window.api.selectDownloadFolder()
+    if (result.success && result.folderPath) {
+      downloadFolder.value = result.folderPath
+    }
+  }
+
+  function clearDownloadFolder(): void {
+    downloadFolder.value = null
   }
 
   async function downloadAll(): Promise<void> {
@@ -107,7 +121,8 @@ export function useDownloader() {
 
     const result = await window.api.downloadAll(
       videos.value.map((v) => ({ contentId: v.contentId, title: v.title })),
-      downloadFormat.value
+      downloadFormat.value,
+      downloadFolder.value ?? undefined
     )
 
     isDownloadingAll.value = false
@@ -130,6 +145,9 @@ export function useDownloader() {
         const v = videos.value.find((v) => v.title === r.title)
         if (v) {
           progressMap.value[v.contentId] = r.success ? 100 : -1
+          if (r.success && r.filePath) {
+            downloadedPaths.value[v.contentId] = r.filePath
+          }
         }
       }
       message.value = `전체 다운로드 완료: ${result.successCount}/${result.total}개 성공`
@@ -142,12 +160,20 @@ export function useDownloader() {
     downloadingIds.value.add(video.contentId)
     progressMap.value[video.contentId] = 0
 
-    const result = await window.api.downloadVideo(video.contentId, video.title, downloadFormat.value)
+    const result = await window.api.downloadVideo(
+      video.contentId,
+      video.title,
+      downloadFormat.value,
+      downloadFolder.value ?? undefined
+    )
 
     downloadingIds.value.delete(video.contentId)
 
     if (result.success) {
       progressMap.value[video.contentId] = 100
+      if (result.filePath) {
+        downloadedPaths.value[video.contentId] = result.filePath
+      }
       message.value = `다운로드 완료: ${video.title}`
     } else if (result.error !== 'cancelled') {
       delete progressMap.value[video.contentId]
@@ -176,11 +202,15 @@ export function useDownloader() {
     progressMap,
     statusMap,
     downloadFormat,
+    downloadFolder,
+    downloadedPaths,
     isDownloadingAll,
     login,
     fetchCourses,
     selectCourse,
     goBackToCourses,
+    selectDownloadFolder,
+    clearDownloadFolder,
     downloadAll,
     download,
     formatDuration,

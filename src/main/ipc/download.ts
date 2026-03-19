@@ -7,23 +7,36 @@ import { downloadOne } from '../services/download'
 export function registerDownloadHandlers(): void {
   ipcMain.handle(
     IPC.DOWNLOAD_VIDEO,
-    async (event, contentId: string, title: string, format: 'mp4' | 'mp3' = 'mp4') => {
+    async (
+      event,
+      contentId: string,
+      title: string,
+      format: 'mp4' | 'mp3' = 'mp4',
+      folderPath?: string
+    ) => {
       const mainWin = BrowserWindow.fromWebContents(event.sender)
       if (!mainWin) return { success: false, error: 'No window found' }
 
       const safeName = title.replace(/[/\\?%*:|"<>]/g, '_')
       const ext = format === 'mp3' ? 'mp3' : 'mp4'
-      const filterName = format === 'mp3' ? 'Audio' : 'Video'
-      const saveResult = await dialog.showSaveDialog(mainWin, {
-        defaultPath: `${safeName}.${ext}`,
-        filters: [{ name: filterName, extensions: [ext] }]
-      })
+      let filePath: string
 
-      if (saveResult.canceled || !saveResult.filePath) {
-        return { success: false, error: 'cancelled' }
+      if (folderPath) {
+        filePath = resolve(folderPath, `${safeName}.${ext}`)
+      } else {
+        const filterName = format === 'mp3' ? 'Audio' : 'Video'
+        const saveResult = await dialog.showSaveDialog(mainWin, {
+          defaultPath: `${safeName}.${ext}`,
+          filters: [{ name: filterName, extensions: [ext] }]
+        })
+
+        if (saveResult.canceled || !saveResult.filePath) {
+          return { success: false, error: 'cancelled' }
+        }
+        filePath = saveResult.filePath
       }
 
-      return downloadOne(contentId, saveResult.filePath, event.sender, format)
+      return downloadOne(contentId, filePath, event.sender, format)
     }
   )
 
@@ -32,23 +45,30 @@ export function registerDownloadHandlers(): void {
     async (
       event,
       videos: { contentId: string; title: string }[],
-      format: 'mp4' | 'mp3' = 'mp4'
+      format: 'mp4' | 'mp3' = 'mp4',
+      folderPath?: string
     ) => {
       const mainWin = BrowserWindow.fromWebContents(event.sender)
       if (!mainWin) return { success: false, error: 'No window found' }
 
-      const folderResult = await dialog.showOpenDialog(mainWin, {
-        properties: ['openDirectory', 'createDirectory'],
-        title: '다운로드 폴더 선택'
-      })
+      let folder: string
 
-      if (folderResult.canceled || !folderResult.filePaths[0]) {
-        return { success: false, error: 'cancelled' }
+      if (folderPath) {
+        folder = folderPath
+      } else {
+        const folderResult = await dialog.showOpenDialog(mainWin, {
+          properties: ['openDirectory', 'createDirectory'],
+          title: '다운로드 폴더 선택'
+        })
+
+        if (folderResult.canceled || !folderResult.filePaths[0]) {
+          return { success: false, error: 'cancelled' }
+        }
+        folder = folderResult.filePaths[0]
       }
 
       const ext = format === 'mp3' ? 'mp3' : 'mp4'
-      const folder = folderResult.filePaths[0]
-      const results: { title: string; success: boolean; error?: string }[] = new Array(
+      const results: { title: string; contentId: string; success: boolean; error?: string; filePath?: string }[] = new Array(
         videos.length
       )
 
@@ -61,7 +81,7 @@ export function registerDownloadHandlers(): void {
           const safeName = video.title.replace(/[/\\?%*:|"<>]/g, '_')
           const filePath = resolve(folder, `${safeName}.${ext}`)
           const result = await downloadOne(video.contentId, filePath, event.sender, format)
-          results[i] = { title: video.title, success: result.success, error: result.error }
+          results[i] = { title: video.title, contentId: video.contentId, success: result.success, error: result.error, filePath: result.filePath }
         }
       }
 

@@ -26,6 +26,21 @@ export function registerSettingsHandlers(): void {
     return { success: true }
   })
 
+  ipcMain.handle(IPC.SELECT_DOWNLOAD_FOLDER, async (event) => {
+    const mainWin = BrowserWindow.fromWebContents(event.sender)
+    if (!mainWin) return { success: false }
+
+    const result = await dialog.showOpenDialog(mainWin, {
+      properties: ['openDirectory', 'createDirectory'],
+      title: '다운로드 폴더 선택'
+    })
+
+    if (result.canceled || !result.filePaths[0]) {
+      return { success: false }
+    }
+    return { success: true, folderPath: result.filePaths[0] }
+  })
+
   ipcMain.handle(IPC.SELECT_FOLDER, async (event) => {
     const mainWin = BrowserWindow.fromWebContents(event.sender)
     if (!mainWin) return { success: false }

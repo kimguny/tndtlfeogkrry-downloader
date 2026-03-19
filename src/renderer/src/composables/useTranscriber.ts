@@ -84,12 +84,13 @@ export function useTranscriber() {
   }
 
   async function downloadAndTranscribeAll(
-    videos: { contentId: string; title: string }[]
+    videos: { contentId: string; title: string }[],
+    folderPath?: string
   ): Promise<void> {
     isTranscribingBatch.value = true
     transcribeMessage.value = '전체 다운로드 및 텍스트 변환을 시작합니다...'
 
-    const result = await window.api.downloadAndTranscribeAll(videos)
+    const result = await window.api.downloadAndTranscribeAll(videos, folderPath)
 
     isTranscribingBatch.value = false
 

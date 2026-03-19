@@ -20,11 +20,15 @@ const {
   progressMap,
   statusMap,
   downloadFormat,
+  downloadFolder,
+  downloadedPaths,
   isDownloadingAll,
   login,
   fetchCourses,
   selectCourse,
   goBackToCourses,
+  selectDownloadFolder,
+  clearDownloadFolder,
   downloadAll,
   download,
   formatDuration,
@@ -56,19 +60,33 @@ watch(transcribeMessage, (val) => {
 })
 
 async function handleTranscribe(video: { contentId: string; title: string }): Promise<void> {
-  // 다운로드된 파일 경로를 알 수 없으므로 폴더 선택
-  const result = await window.api.selectFolder()
-  if (!result.success || !result.folderPath) return
-
+  const savedPath = downloadedPaths.value[video.contentId]
   const safeName = video.title.replace(/[/\\?%*:|"<>]/g, '_')
-  const filePath = `${result.folderPath}/${safeName}.mp3`
+
+  if (savedPath) {
+    const fileName = savedPath.split('/').pop() || `${safeName}.mp3`
+    await transcribe(savedPath, fileName)
+    return
+  }
+
+  // 다운로드 경로가 없으면 폴더 선택
+  let folder = downloadFolder.value
+
+  if (!folder) {
+    const result = await window.api.selectFolder()
+    if (!result.success || !result.folderPath) return
+    folder = result.folderPath
+  }
+
+  const filePath = `${folder}/${safeName}.mp3`
   await transcribe(filePath, `${safeName}.mp3`)
 }
 
 async function handleTranscribeAll(): Promise<void> {
   if (videos.value.length === 0) return
   await downloadAndTranscribeAll(
-    videos.value.map((v) => ({ contentId: v.contentId, title: v.title }))
+    videos.value.map((v) => ({ contentId: v.contentId, title: v.title })),
+    downloadFolder.value ?? undefined
   )
 }
 
@@ -116,12 +134,15 @@ async function handleDeleteApiKey(): Promise<void> {
                 :is-transcribing-batch="isTranscribingBatch"
                 :transcribe-progress-map="transcribeProgressMap"
                 :transcribe-status-map="transcribeStatusMap"
+                :download-folder="downloadFolder"
                 v-model:download-format="downloadFormat"
                 @back="goBackToCourses"
                 @download-all="downloadAll"
                 @download="download"
                 @transcribe="handleTranscribe"
                 @transcribe-all="handleTranscribeAll"
+                @select-folder="selectDownloadFolder"
+                @clear-folder="clearDownloadFolder"
               />
             </Transition>
           </div>
