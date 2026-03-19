@@ -1,19 +1,11 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-
-interface VideoItem {
-  title: string
-  contentId: string
-  duration: number
-  fileSize: number
-  thumbnailUrl: string
-  weekPosition: number
-}
-
-interface CourseItem {
-  id: string
-  name: string
-  term: string
-}
+import type {
+  CourseItem,
+  VideoItem,
+  VideoRef,
+  DownloadProgressData,
+  TranscribeProgressData
+} from '../shared/types'
 
 interface DownloadApi {
   openLogin: () => Promise<{ success: boolean }>
@@ -33,7 +25,7 @@ interface DownloadApi {
     format?: 'mp4' | 'mp3'
   ) => Promise<{ success: boolean; error?: string; filePath?: string }>
   downloadAll: (
-    videos: { contentId: string; title: string }[],
+    videos: VideoRef[],
     format?: 'mp4' | 'mp3'
   ) => Promise<{
     success: boolean
@@ -42,17 +34,7 @@ interface DownloadApi {
     successCount?: number
     total?: number
   }>
-  onDownloadProgress: (
-    callback: (data: {
-      contentId: string
-      downloaded: number
-      total: number
-      percent: number
-      status?: 'converting' | 'splitting' | 'split-done' | 'done'
-      splitCurrent?: number
-      splitTotal?: number
-    }) => void
-  ) => void
+  onDownloadProgress: (callback: (data: DownloadProgressData) => void) => void
   removeDownloadProgress: () => void
 
   // Gemini STT
@@ -72,7 +54,7 @@ interface DownloadApi {
   openFile: (filePath: string) => Promise<{ success: boolean }>
   selectFolder: () => Promise<{ success: boolean; folderPath?: string }>
   downloadAndTranscribeAll: (
-    videos: { contentId: string; title: string }[]
+    videos: VideoRef[]
   ) => Promise<{
     success: boolean
     error?: string
@@ -80,17 +62,7 @@ interface DownloadApi {
     transcribeSuccessCount?: number
     total?: number
   }>
-  onTranscribeProgress: (
-    callback: (data: {
-      fileName: string
-      percent: number
-      status: 'transcribing' | 'merging' | 'done' | 'error'
-      currentPart?: number
-      totalParts?: number
-      currentFile?: number
-      totalFiles?: number
-    }) => void
-  ) => void
+  onTranscribeProgress: (callback: (data: TranscribeProgressData) => void) => void
   removeTranscribeProgress: () => void
 }
 

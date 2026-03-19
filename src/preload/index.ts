@@ -1,39 +1,34 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import { IPC, IPC_EVENT } from '../shared/channels'
+import type { CourseItem, VideoItem, VideoRef, DownloadProgressData, TranscribeProgressData } from '../shared/types'
 
 const api = {
-  openLogin: (): Promise<{ success: boolean }> => ipcRenderer.invoke('open-login'),
+  openLogin: (): Promise<{ success: boolean }> => ipcRenderer.invoke(IPC.OPEN_LOGIN),
 
   fetchCourses: (): Promise<{
     success: boolean
     error?: string
-    courses?: { id: string; name: string; term: string }[]
-  }> => ipcRenderer.invoke('fetch-courses'),
+    courses?: CourseItem[]
+  }> => ipcRenderer.invoke(IPC.FETCH_COURSES),
 
   fetchModules: (
     courseId: string
   ): Promise<{
     success: boolean
     error?: string
-    videos?: {
-      title: string
-      contentId: string
-      duration: number
-      fileSize: number
-      thumbnailUrl: string
-      weekPosition: number
-    }[]
-  }> => ipcRenderer.invoke('fetch-modules', courseId),
+    videos?: VideoItem[]
+  }> => ipcRenderer.invoke(IPC.FETCH_MODULES, courseId),
 
   downloadVideo: (
     contentId: string,
     title: string,
     format?: 'mp4' | 'mp3'
   ): Promise<{ success: boolean; error?: string; filePath?: string }> =>
-    ipcRenderer.invoke('download-video', contentId, title, format || 'mp4'),
+    ipcRenderer.invoke(IPC.DOWNLOAD_VIDEO, contentId, title, format || 'mp4'),
 
   downloadAll: (
-    videos: { contentId: string; title: string }[],
+    videos: VideoRef[],
     format?: 'mp4' | 'mp3'
   ): Promise<{
     success: boolean
@@ -41,39 +36,29 @@ const api = {
     results?: { title: string; success: boolean; error?: string }[]
     successCount?: number
     total?: number
-  }> => ipcRenderer.invoke('download-all', videos, format || 'mp4'),
+  }> => ipcRenderer.invoke(IPC.DOWNLOAD_ALL, videos, format || 'mp4'),
 
-  onDownloadProgress: (
-    callback: (data: {
-      contentId: string
-      downloaded: number
-      total: number
-      percent: number
-      status?: 'converting' | 'splitting' | 'split-done' | 'done'
-      splitCurrent?: number
-      splitTotal?: number
-    }) => void
-  ): void => {
-    ipcRenderer.on('download-progress', (_event, data) => callback(data))
+  onDownloadProgress: (callback: (data: DownloadProgressData) => void): void => {
+    ipcRenderer.on(IPC_EVENT.DOWNLOAD_PROGRESS, (_event, data) => callback(data))
   },
 
   removeDownloadProgress: (): void => {
-    ipcRenderer.removeAllListeners('download-progress')
+    ipcRenderer.removeAllListeners(IPC_EVENT.DOWNLOAD_PROGRESS)
   },
 
   // --- Gemini STT ---
   setGeminiApiKey: (key: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('set-gemini-api-key', key),
+    ipcRenderer.invoke(IPC.SET_GEMINI_API_KEY, key),
 
-  getGeminiApiKey: (): Promise<{ hasKey: boolean }> => ipcRenderer.invoke('get-gemini-api-key'),
+  getGeminiApiKey: (): Promise<{ hasKey: boolean }> => ipcRenderer.invoke(IPC.GET_GEMINI_API_KEY),
 
   deleteGeminiApiKey: (): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke('delete-gemini-api-key'),
+    ipcRenderer.invoke(IPC.DELETE_GEMINI_API_KEY),
 
   transcribeAudio: (
     filePath: string
   ): Promise<{ success: boolean; text?: string; txtPath?: string; error?: string }> =>
-    ipcRenderer.invoke('transcribe-audio', filePath),
+    ipcRenderer.invoke(IPC.TRANSCRIBE_AUDIO, filePath),
 
   transcribeBatch: (
     dirPath: string
@@ -83,40 +68,30 @@ const api = {
     results?: { fileName: string; success: boolean; error?: string }[]
     successCount?: number
     total?: number
-  }> => ipcRenderer.invoke('transcribe-batch', dirPath),
+  }> => ipcRenderer.invoke(IPC.TRANSCRIBE_BATCH, dirPath),
 
   openFile: (filePath: string): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke('open-file', filePath),
+    ipcRenderer.invoke(IPC.OPEN_FILE, filePath),
 
   selectFolder: (): Promise<{ success: boolean; folderPath?: string }> =>
-    ipcRenderer.invoke('select-folder'),
+    ipcRenderer.invoke(IPC.SELECT_FOLDER),
 
   downloadAndTranscribeAll: (
-    videos: { contentId: string; title: string }[]
+    videos: VideoRef[]
   ): Promise<{
     success: boolean
     error?: string
     downloadSuccessCount?: number
     transcribeSuccessCount?: number
     total?: number
-  }> => ipcRenderer.invoke('download-and-transcribe-all', videos),
+  }> => ipcRenderer.invoke(IPC.DOWNLOAD_AND_TRANSCRIBE_ALL, videos),
 
-  onTranscribeProgress: (
-    callback: (data: {
-      fileName: string
-      percent: number
-      status: 'transcribing' | 'merging' | 'done' | 'error'
-      currentPart?: number
-      totalParts?: number
-      currentFile?: number
-      totalFiles?: number
-    }) => void
-  ): void => {
-    ipcRenderer.on('transcribe-progress', (_event, data) => callback(data))
+  onTranscribeProgress: (callback: (data: TranscribeProgressData) => void): void => {
+    ipcRenderer.on(IPC_EVENT.TRANSCRIBE_PROGRESS, (_event, data) => callback(data))
   },
 
   removeTranscribeProgress: (): void => {
-    ipcRenderer.removeAllListeners('transcribe-progress')
+    ipcRenderer.removeAllListeners(IPC_EVENT.TRANSCRIBE_PROGRESS)
   }
 }
 

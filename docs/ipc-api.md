@@ -1,9 +1,13 @@
 # IPC API 명세
 
+> 모든 채널명은 `src/shared/channels.ts`에 상수로 정의되어 있다.
+> 핸들러 구현은 `src/main/ipc/` 하위 파일에 위치한다.
+
 ## invoke/handle 채널 (요청-응답)
 
-### `open-login`
+### `open-login` (`IPC.OPEN_LOGIN`)
 Canvas LMS 로그인 창을 열고 로그인 결과를 반환한다.
+**핸들러**: `ipc/auth.ts`
 
 ```typescript
 // 요청: 파라미터 없음
@@ -11,8 +15,9 @@ Canvas LMS 로그인 창을 열고 로그인 결과를 반환한다.
 { success: boolean }
 ```
 
-### `fetch-courses`
+### `fetch-courses` (`IPC.FETCH_COURSES`)
 수강 중인 강좌 목록을 조회한다.
+**핸들러**: `ipc/courses.ts`
 
 ```typescript
 // 요청: 파라미터 없음
@@ -20,12 +25,13 @@ Canvas LMS 로그인 창을 열고 로그인 결과를 반환한다.
 {
   success: boolean
   error?: string
-  courses?: { id: string; name: string; term: string }[]
+  courses?: CourseItem[]  // shared/types.ts
 }
 ```
 
-### `fetch-modules`
+### `fetch-modules` (`IPC.FETCH_MODULES`)
 특정 강좌의 영상 목록을 조회한다.
+**핸들러**: `ipc/courses.ts`
 
 ```typescript
 // 요청:
@@ -35,19 +41,13 @@ courseId: string
 {
   success: boolean
   error?: string
-  videos?: {
-    title: string
-    contentId: string
-    duration: number      // 초
-    fileSize: number      // 바이트
-    thumbnailUrl: string
-    weekPosition: number
-  }[]
+  videos?: VideoItem[]  // shared/types.ts
 }
 ```
 
-### `download-video`
+### `download-video` (`IPC.DOWNLOAD_VIDEO`)
 단일 영상을 다운로드한다. 파일 저장 다이얼로그가 열린다.
+**핸들러**: `ipc/download.ts`
 
 ```typescript
 // 요청:
@@ -59,13 +59,14 @@ format: 'mp4' | 'mp3'  // 기본값: 'mp4'
 { success: boolean; error?: string; filePath?: string }
 ```
 
-### `download-all`
+### `download-all` (`IPC.DOWNLOAD_ALL`)
 전체 영상을 일괄 다운로드한다. 폴더 선택 다이얼로그가 열린다.
+**핸들러**: `ipc/download.ts`
 
 ```typescript
 // 요청:
-videos: { contentId: string; title: string }[]
-format: 'mp4' | 'mp3'  // 기본값: 'mp4'
+videos: VideoRef[]       // shared/types.ts
+format: 'mp4' | 'mp3'   // 기본값: 'mp4'
 
 // 응답:
 {
@@ -77,8 +78,9 @@ format: 'mp4' | 'mp3'  // 기본값: 'mp4'
 }
 ```
 
-### `set-gemini-api-key`
+### `set-gemini-api-key` (`IPC.SET_GEMINI_API_KEY`)
 Gemini API 키를 암호화하여 저장한다.
+**핸들러**: `ipc/settings.ts`
 
 ```typescript
 // 요청:
@@ -88,8 +90,9 @@ key: string
 { success: boolean; error?: string }
 ```
 
-### `get-gemini-api-key`
+### `get-gemini-api-key` (`IPC.GET_GEMINI_API_KEY`)
 Gemini API 키 존재 여부를 확인한다 (키 값은 반환하지 않음).
+**핸들러**: `ipc/settings.ts`
 
 ```typescript
 // 요청: 파라미터 없음
@@ -97,8 +100,9 @@ Gemini API 키 존재 여부를 확인한다 (키 값은 반환하지 않음).
 { hasKey: boolean }
 ```
 
-### `delete-gemini-api-key`
+### `delete-gemini-api-key` (`IPC.DELETE_GEMINI_API_KEY`)
 저장된 Gemini API 키를 삭제한다.
+**핸들러**: `ipc/settings.ts`
 
 ```typescript
 // 요청: 파라미터 없음
@@ -106,8 +110,9 @@ Gemini API 키 존재 여부를 확인한다 (키 값은 반환하지 않음).
 { success: boolean }
 ```
 
-### `transcribe-audio`
+### `transcribe-audio` (`IPC.TRANSCRIBE_AUDIO`)
 단일 MP3 파일(또는 분할 파일 그룹)을 텍스트로 변환한다.
+**핸들러**: `ipc/transcribe.ts`
 
 ```typescript
 // 요청:
@@ -122,8 +127,9 @@ filePath: string  // MP3 파일 경로
 }
 ```
 
-### `transcribe-batch`
+### `transcribe-batch` (`IPC.TRANSCRIBE_BATCH`)
 폴더 내 모든 MP3 파일을 일괄 텍스트 변환한다.
+**핸들러**: `ipc/transcribe.ts`
 
 ```typescript
 // 요청:
@@ -139,12 +145,13 @@ dirPath: string  // MP3 파일이 있는 폴더 경로
 }
 ```
 
-### `download-and-transcribe-all`
+### `download-and-transcribe-all` (`IPC.DOWNLOAD_AND_TRANSCRIBE_ALL`)
 전체 영상 다운로드(MP3) + 텍스트 변환을 한번에 수행한다.
+**핸들러**: `ipc/transcribe.ts`
 
 ```typescript
 // 요청:
-videos: { contentId: string; title: string }[]
+videos: VideoRef[]  // shared/types.ts
 
 // 응답:
 {
@@ -156,8 +163,9 @@ videos: { contentId: string; title: string }[]
 }
 ```
 
-### `open-file`
+### `open-file` (`IPC.OPEN_FILE`)
 네이티브 앱으로 파일을 연다.
+**핸들러**: `ipc/settings.ts`
 
 ```typescript
 // 요청:
@@ -167,8 +175,9 @@ filePath: string
 { success: boolean }
 ```
 
-### `select-folder`
+### `select-folder` (`IPC.SELECT_FOLDER`)
 폴더 선택 다이얼로그를 열어 경로를 반환한다.
+**핸들러**: `ipc/settings.ts`
 
 ```typescript
 // 요청: 파라미터 없음
@@ -180,8 +189,9 @@ filePath: string
 
 ## send/on 이벤트 (단방향, Main → Renderer)
 
-### `download-progress`
+### `download-progress` (`IPC_EVENT.DOWNLOAD_PROGRESS`)
 다운로드/변환/분할 진행률을 실시간으로 전송한다.
+**타입**: `DownloadProgressData` (`shared/types.ts`)
 
 ```typescript
 {
@@ -203,8 +213,9 @@ filePath: string
 - `92~95%`: MP3 변환 중 (`converting`)
 - `96~100%`: MP3 분할 중 (`splitting`)
 
-### `transcribe-progress`
+### `transcribe-progress` (`IPC_EVENT.TRANSCRIBE_PROGRESS`)
 텍스트 변환 진행률을 실시간으로 전송한다.
+**타입**: `TranscribeProgressData` (`shared/types.ts`)
 
 ```typescript
 {
