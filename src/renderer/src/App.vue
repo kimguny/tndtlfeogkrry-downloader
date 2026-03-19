@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import type { VideoItem } from './types'
 import { useDownloader } from './composables/useDownloader'
 import { useTranscriber } from './composables/useTranscriber'
 import Sidebar from './components/layout/Sidebar.vue'
@@ -82,10 +83,22 @@ async function handleTranscribe(video: { contentId: string; title: string }): Pr
   await transcribe(filePath, `${safeName}.mp3`)
 }
 
+async function handleDownloadSelected(selected: VideoItem[]): Promise<void> {
+  await downloadAll(selected)
+}
+
 async function handleTranscribeAll(): Promise<void> {
   if (videos.value.length === 0) return
   await downloadAndTranscribeAll(
     videos.value.map((v) => ({ contentId: v.contentId, title: v.title })),
+    downloadFolder.value ?? undefined
+  )
+}
+
+async function handleTranscribeSelected(selected: VideoItem[]): Promise<void> {
+  if (selected.length === 0) return
+  await downloadAndTranscribeAll(
+    selected.map((v) => ({ contentId: v.contentId, title: v.title })),
     downloadFolder.value ?? undefined
   )
 }
@@ -138,9 +151,11 @@ async function handleDeleteApiKey(): Promise<void> {
                 v-model:download-format="downloadFormat"
                 @back="goBackToCourses"
                 @download-all="downloadAll"
+                @download-selected="handleDownloadSelected"
                 @download="download"
                 @transcribe="handleTranscribe"
                 @transcribe-all="handleTranscribeAll"
+                @transcribe-selected="handleTranscribeSelected"
                 @select-folder="selectDownloadFolder"
                 @clear-folder="clearDownloadFolder"
               />

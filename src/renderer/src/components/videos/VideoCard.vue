@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Download, CheckCircle2, Loader2, Clock, HardDrive, Calendar, FileText } from 'lucide-vue-next'
+import { Download, CheckCircle2, Loader2, Clock, HardDrive, Calendar, FileText, Check } from 'lucide-vue-next'
 import type { TranscribeStatus } from '../../composables/useTranscriber'
 import { computed } from 'vue'
 import type { VideoItem } from '../../types'
@@ -14,11 +14,13 @@ const props = defineProps<{
   hasApiKey?: boolean
   transcribeProgress?: number
   transcribeStatus?: TranscribeStatus
+  selected?: boolean
 }>()
 
 const emit = defineEmits<{
   download: [video: VideoItem]
   transcribe: [video: VideoItem]
+  toggleSelect: [video: VideoItem]
 }>()
 
 const isComplete = computed(() => !props.isDownloading && props.progress === 100)
@@ -53,13 +55,24 @@ const isTranscribeDone = computed(() => props.transcribeStatus?.status === 'done
 </script>
 
 <template>
-  <div class="group flex flex-col sm:flex-row items-stretch gap-4 sm:gap-5 p-4 sm:pr-6 border border-border/60 rounded-[20px] sm:rounded-[24px] bg-surface transition-all duration-300 hover:border-primary/40 hover:shadow-md hover:shadow-primary/5 relative overflow-hidden">
+  <div class="group flex flex-col sm:flex-row items-stretch gap-4 sm:gap-5 p-4 sm:pr-6 border border-border/60 rounded-[20px] sm:rounded-[24px] bg-surface transition-all duration-300 hover:border-primary/40 hover:shadow-md hover:shadow-primary/5 relative overflow-hidden" :class="{ 'border-primary/60 bg-primary/5': selected }">
     <!-- Background Progress Bar -->
-    <div 
-      v-if="isDownloading" 
+    <div
+      v-if="isDownloading"
       class="absolute inset-0 bg-primary/5 transition-all duration-300 ease-out z-0"
       :style="{ width: `${progress || 0}%` }"
     ></div>
+
+    <!-- Checkbox -->
+    <button
+      class="relative z-10 hidden sm:flex items-center justify-center shrink-0 w-6 h-6 my-auto rounded-md border-2 cursor-pointer transition-all duration-200"
+      :class="selected
+        ? 'bg-primary border-primary text-white'
+        : 'bg-transparent border-border hover:border-primary/60 text-transparent'"
+      @click="emit('toggleSelect', video)"
+    >
+      <Check v-if="selected" :size="14" :stroke-width="3" />
+    </button>
 
     <!-- Thumbnail -->
     <div class="relative z-10 w-full sm:w-40 h-36 sm:h-24 rounded-xl sm:rounded-2xl overflow-hidden bg-surface-mute flex-shrink-0 shadow-sm border border-border/50">

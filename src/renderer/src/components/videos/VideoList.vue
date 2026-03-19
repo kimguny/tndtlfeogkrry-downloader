@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ArrowLeft, Download, Loader2, PlaySquare, FileText, FolderOpen, X } from 'lucide-vue-next'
+import { ref, computed } from 'vue'
+import { ArrowLeft, Download, Loader2, PlaySquare, FileText, FolderOpen, X, ChevronDown, CheckSquare, Square } from 'lucide-vue-next'
 import type { VideoItem } from '../../types'
 import type { TranscribeStatus } from '../../composables/useTranscriber'
 import FormatToggle from './FormatToggle.vue'
 import VideoCard from './VideoCard.vue'
 
-defineProps<{
+const props = defineProps<{
   videos: VideoItem[]
   isLoading: boolean
   isDownloadingAll: boolean
@@ -26,16 +27,73 @@ const downloadFormat = defineModel<'mp4' | 'mp3'>('downloadFormat', { required: 
 const emit = defineEmits<{
   back: []
   downloadAll: []
+  downloadSelected: [videos: VideoItem[]]
   download: [video: VideoItem]
   transcribe: [video: VideoItem]
   transcribeAll: []
+  transcribeSelected: [videos: VideoItem[]]
   selectFolder: []
   clearFolder: []
 }>()
+
+// 선택 상태
+const selectedIds = ref<Set<string>>(new Set())
+const showDropdown = ref(false)
+
+const selectedCount = computed(() => selectedIds.value.size)
+const isAllSelected = computed(() =>
+  props.videos.length > 0 && selectedIds.value.size === props.videos.length
+)
+const selectedVideos = computed(() =>
+  props.videos.filter((v) => selectedIds.value.has(v.contentId))
+)
+
+function toggleSelect(video: VideoItem): void {
+  const ids = new Set(selectedIds.value)
+  if (ids.has(video.contentId)) {
+    ids.delete(video.contentId)
+  } else {
+    ids.add(video.contentId)
+  }
+  selectedIds.value = ids
+}
+
+function toggleSelectAll(): void {
+  if (isAllSelected.value) {
+    selectedIds.value = new Set()
+  } else {
+    selectedIds.value = new Set(props.videos.map((v) => v.contentId))
+  }
+}
+
+function handleAction(action: 'download' | 'transcribe'): void {
+  showDropdown.value = false
+  const targets = selectedCount.value > 0 ? selectedVideos.value : undefined
+  if (action === 'download') {
+    if (targets) {
+      emit('downloadSelected', targets)
+    } else {
+      emit('downloadAll')
+    }
+  } else {
+    if (targets) {
+      emit('transcribeSelected', targets)
+    } else {
+      emit('transcribeAll')
+    }
+  }
+}
+
+function closeDropdown(e: MouseEvent): void {
+  const target = e.target as HTMLElement
+  if (!target.closest('.action-dropdown')) {
+    showDropdown.value = false
+  }
+}
 </script>
 
 <template>
-  <div class="h-full flex flex-col">
+  <div class="h-full flex flex-col" @click="closeDropdown">
     <!-- Header -->
     <div class="flex flex-col gap-4 mb-8">
       <div class="flex items-center gap-3 -ml-2">
@@ -54,26 +112,57 @@ const emit = defineEmits<{
 
       <div class="flex flex-wrap items-center gap-3">
         <FormatToggle v-model="downloadFormat" />
+
+        <!-- 전체/해제 선택 버튼 -->
         <button
           v-if="videos.length > 0"
-          class="flex items-center gap-2 px-5 py-2.5 rounded-2xl border-none text-sm font-bold cursor-pointer whitespace-nowrap bg-primary text-white hover:bg-primary-hover shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:-translate-y-0.5"
-          :disabled="isDownloadingAll || isLoading"
-          @click="emit('downloadAll')"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-border text-sm font-bold cursor-pointer whitespace-nowrap bg-surface-mute text-text-2 hover:bg-surface-hover hover:text-text-1 transition-all"
+          @click="toggleSelectAll"
         >
-          <Loader2 v-if="isDownloadingAll" :size="18" class="animate-spin" />
-          <Download v-else :size="18" />
-          {{ isDownloadingAll ? '다운로드 중...' : '전체 다운로드' }}
+          <CheckSquare v-if="isAllSelected" :size="16" class="text-primary" />
+          <Square v-else :size="16" />
+          {{ isAllSelected ? '전체 해제' : '전체 선택' }}
         </button>
-        <button
-          v-if="videos.length > 0 && hasApiKey"
-          class="flex items-center gap-2 px-5 py-2.5 rounded-2xl border-none text-sm font-bold cursor-pointer whitespace-nowrap bg-purple-500 text-white hover:bg-purple-600 shadow-lg shadow-purple-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:outline-none"
-          :disabled="isTranscribingBatch || isLoading"
-          @click="emit('transcribeAll')"
-        >
-          <Loader2 v-if="isTranscribingBatch" :size="18" class="animate-spin" />
-          <FileText v-else :size="18" />
-          {{ isTranscribingBatch ? '변환 중...' : '전체 텍스트 변환' }}
-        </button>
+
+        <!-- 액션 드롭다운 -->
+        <div v-if="videos.length > 0" class="relative action-dropdown">
+          <button
+            class="flex items-center gap-2 px-5 py-2.5 rounded-2xl border-none text-sm font-bold cursor-pointer whitespace-nowrap bg-primary text-white hover:bg-primary-hover shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+            :disabled="isDownloadingAll || isTranscribingBatch || isLoading"
+            @click.stop="showDropdown = !showDropdown"
+          >
+            <Loader2 v-if="isDownloadingAll || isTranscribingBatch" :size="18" class="animate-spin" />
+            <template v-else>
+              <Download :size="18" />
+              {{ selectedCount > 0 ? `선택 (${selectedCount})` : '전체' }}
+              <ChevronDown :size="14" class="transition-transform" :class="{ 'rotate-180': showDropdown }" />
+            </template>
+          </button>
+
+          <!-- 드롭다운 메뉴 -->
+          <Transition name="dropdown">
+            <div
+              v-if="showDropdown"
+              class="absolute top-full left-0 mt-2 w-52 bg-surface border border-border rounded-2xl shadow-xl shadow-black/10 overflow-hidden z-50"
+            >
+              <button
+                class="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-text-1 hover:bg-surface-mute transition-all cursor-pointer border-none bg-transparent text-left"
+                @click="handleAction('download')"
+              >
+                <Download :size="16" class="text-primary shrink-0" />
+                {{ selectedCount > 0 ? `${selectedCount}개 다운로드` : '전체 다운로드' }}
+              </button>
+              <button
+                v-if="hasApiKey"
+                class="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-text-1 hover:bg-surface-mute transition-all cursor-pointer border-none bg-transparent text-left border-t border-border/50"
+                @click="handleAction('transcribe')"
+              >
+                <FileText :size="16" class="text-purple-500 shrink-0" />
+                {{ selectedCount > 0 ? `${selectedCount}개 텍스트 변환` : '전체 텍스트 변환' }}
+              </button>
+            </div>
+          </Transition>
+        </div>
       </div>
     </div>
 
@@ -124,11 +213,27 @@ const emit = defineEmits<{
         :format-duration="formatDuration"
         :format-size="formatSize"
         :has-api-key="hasApiKey"
+        :selected="selectedIds.has(video.contentId)"
         :transcribe-progress="transcribeProgressMap?.[video.title + '.mp3'] ?? transcribeProgressMap?.[video.title]"
         :transcribe-status="transcribeStatusMap?.[video.title + '.mp3'] ?? transcribeStatusMap?.[video.title]"
         @download="emit('download', $event)"
         @transcribe="emit('transcribe', $event)"
+        @toggle-select="toggleSelect"
       />
     </div>
   </div>
 </template>
+
+<style scoped>
+.dropdown-enter-active {
+  transition: all 0.15s ease-out;
+}
+.dropdown-leave-active {
+  transition: all 0.1s ease-in;
+}
+.dropdown-enter-from,
+.dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.97);
+}
+</style>

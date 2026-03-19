@@ -109,18 +109,19 @@ export function useDownloader() {
     downloadFolder.value = null
   }
 
-  async function downloadAll(): Promise<void> {
-    if (videos.value.length === 0) return
+  async function downloadAll(targetVideos?: VideoItem[]): Promise<void> {
+    const targets = targetVideos || videos.value
+    if (targets.length === 0) return
     isDownloadingAll.value = true
-    message.value = '전체 다운로드를 시작합니다...'
+    message.value = `${targets.length}개 다운로드를 시작합니다...`
 
-    for (const v of videos.value) {
+    for (const v of targets) {
       downloadingIds.value.add(v.contentId)
       progressMap.value[v.contentId] = 0
     }
 
     const result = await window.api.downloadAll(
-      videos.value.map((v) => ({ contentId: v.contentId, title: v.title })),
+      targets.map((v) => ({ contentId: v.contentId, title: v.title })),
       downloadFormat.value,
       downloadFolder.value ?? undefined
     )
@@ -128,7 +129,7 @@ export function useDownloader() {
     isDownloadingAll.value = false
 
     if (result.error === 'cancelled') {
-      for (const v of videos.value) {
+      for (const v of targets) {
         downloadingIds.value.delete(v.contentId)
         delete progressMap.value[v.contentId]
       }
@@ -136,13 +137,13 @@ export function useDownloader() {
       return
     }
 
-    for (const v of videos.value) {
+    for (const v of targets) {
       downloadingIds.value.delete(v.contentId)
     }
 
     if (result.success && result.results) {
       for (const r of result.results) {
-        const v = videos.value.find((v) => v.title === r.title)
+        const v = targets.find((v) => v.title === r.title)
         if (v) {
           progressMap.value[v.contentId] = r.success ? 100 : -1
           if (r.success && r.filePath) {
@@ -150,9 +151,9 @@ export function useDownloader() {
           }
         }
       }
-      message.value = `전체 다운로드 완료: ${result.successCount}/${result.total}개 성공`
+      message.value = `다운로드 완료: ${result.successCount}/${result.total}개 성공`
     } else {
-      message.value = result.error || '전체 다운로드 실패'
+      message.value = result.error || '다운로드 실패'
     }
   }
 
