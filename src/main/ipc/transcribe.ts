@@ -1,6 +1,7 @@
 import { basename, dirname, extname, join } from 'path'
 import { BrowserWindow, ipcMain, dialog } from 'electron'
-import { readdirSync, writeFileSync } from 'fs'
+import { existsSync, readdirSync, writeFileSync } from 'fs'
+import { unlink } from 'fs/promises'
 import { resolve } from 'path'
 import { IPC } from '../../shared/channels'
 import { IPC_EVENT } from '../../shared/channels'
@@ -8,6 +9,7 @@ import { MAX_CONCURRENT_DOWNLOADS, MAX_CONCURRENT_TRANSCRIPTIONS } from '../../s
 import { loadGeminiApiKey } from '../services/gemini'
 import { transcribeWithRetry, groupMp3Files } from '../services/gemini'
 import { downloadOne } from '../services/download'
+import { convertToMp3, splitMp3 } from '../services/media'
 
 export function registerTranscribeHandlers(): void {
   ipcMain.handle(IPC.TRANSCRIBE_AUDIO, async (event, filePath: string) => {
@@ -18,19 +20,37 @@ export function registerTranscribeHandlers(): void {
 
     try {
       const dir = dirname(filePath)
+      const ext = extname(filePath).toLowerCase()
       const name = basename(filePath, extname(filePath))
+      const baseName = name.replace(/_part\d+$/, '')
 
-      // "_partN" 접미사에서 원본 이름 추출 (splitMp3()가 생성한 파일명 패턴)
-      const partMatch = name.match(/^(.+)_part\d+$/)
-      const baseName = partMatch ? partMatch[1] : name
+      let mp3Path = filePath
+      let convertedFromMp4 = false
 
-      // 같은 원본의 분할 파일을 모두 찾아 순서대로 변환 (part1 선택해도 part2,3 자동 포함)
+      // mp4인 경우 mp3로 먼저 변환
+      if (ext === '.mp4') {
+        mp3Path = join(dir, `${name}.mp3`)
+
+        if (!existsSync(mp3Path)) {
+          event.sender.send(IPC_EVENT.TRANSCRIBE_PROGRESS, {
+            fileName: basename(filePath),
+            percent: 0,
+            status: 'converting'
+          })
+          await convertToMp3(filePath, mp3Path)
+          convertedFromMp4 = true
+
+          // 19MB 초과 시 분할
+          await splitMp3(mp3Path, name, event.sender)
+        }
+      }
+
+      // mp3 분할 파일 검색
       const allFiles = readdirSync(dir).filter((f) => f.endsWith('.mp3')).sort()
       const partFiles = allFiles
         .filter((f) => f.match(new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_part\\d+\\.mp3$`)))
         .map((f) => join(dir, f))
-
-      const filesToTranscribe = partFiles.length > 0 ? partFiles : [filePath]
+      const filesToTranscribe = partFiles.length > 0 ? partFiles : [mp3Path]
       const totalParts = filesToTranscribe.length
       const texts: string[] = []
 
@@ -56,6 +76,13 @@ export function registerTranscribeHandlers(): void {
       const mergedText = texts.join('\n\n')
       const txtPath = join(dir, `${baseName}.txt`)
       writeFileSync(txtPath, mergedText, 'utf-8')
+
+      // mp4에서 변환된 임시 mp3 파일 정리
+      if (convertedFromMp4) {
+        for (const f of filesToTranscribe) {
+          await unlink(f).catch(() => {})
+        }
+      }
 
       event.sender.send(IPC_EVENT.TRANSCRIBE_PROGRESS, {
         fileName: basename(filePath),
@@ -149,7 +176,7 @@ export function registerTranscribeHandlers(): void {
 
   ipcMain.handle(
     IPC.DOWNLOAD_AND_TRANSCRIBE_ALL,
-    async (event, videos: { contentId: string; title: string }[]) => {
+    async (event, videos: { contentId: string; title: string }[], folderPath?: string) => {
       const apiKey = loadGeminiApiKey()
       if (!apiKey) {
         return { success: false, error: 'Gemini API 키가 설정되지 않았습니다.' }
@@ -158,16 +185,21 @@ export function registerTranscribeHandlers(): void {
       const mainWin = BrowserWindow.fromWebContents(event.sender)
       if (!mainWin) return { success: false, error: 'No window found' }
 
-      const folderResult = await dialog.showOpenDialog(mainWin, {
-        properties: ['openDirectory', 'createDirectory'],
-        title: '다운로드 및 변환 폴더 선택'
-      })
+      let folder: string
 
-      if (folderResult.canceled || !folderResult.filePaths[0]) {
-        return { success: false, error: 'cancelled' }
+      if (folderPath) {
+        folder = folderPath
+      } else {
+        const folderResult = await dialog.showOpenDialog(mainWin, {
+          properties: ['openDirectory', 'createDirectory'],
+          title: '다운로드 및 변환 폴더 선택'
+        })
+
+        if (folderResult.canceled || !folderResult.filePaths[0]) {
+          return { success: false, error: 'cancelled' }
+        }
+        folder = folderResult.filePaths[0]
       }
-
-      const folder = folderResult.filePaths[0]
       const key = apiKey // TS narrowing: 클로저 안에서 null이 아님을 보장
 
       // === 2단계 파이프라인 ===
