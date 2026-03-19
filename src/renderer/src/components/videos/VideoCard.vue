@@ -74,19 +74,6 @@ const isTranscribeDone = computed(() => props.transcribeStatus?.status === 'done
       <Check v-if="selected" :size="14" :stroke-width="3" />
     </button>
 
-    <!-- Thumbnail -->
-    <div class="relative z-10 w-full sm:w-40 h-36 sm:h-24 rounded-xl sm:rounded-2xl overflow-hidden bg-surface-mute flex-shrink-0 shadow-sm border border-border/50">
-      <img
-        v-if="video.thumbnailUrl"
-        :src="video.thumbnailUrl"
-        class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-        alt="thumbnail"
-      />
-      <div v-else class="w-full h-full flex items-center justify-center text-text-3 text-[10px] font-bold tracking-wider opacity-50 uppercase">
-        No Preview
-      </div>
-    </div>
-
     <!-- Info -->
     <div class="relative z-10 flex-1 min-w-0 flex flex-col justify-center py-0 sm:py-1">
       <div class="text-base sm:text-[17px] font-black text-text-1 truncate mb-2 group-hover:text-primary transition-colors tracking-tight">
