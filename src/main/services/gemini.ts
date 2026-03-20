@@ -83,9 +83,10 @@ export function groupMp3Files(dirPath: string): Map<string, string[]> {
   const groups = new Map<string, string[]>()
 
   for (const file of files) {
-    // splitMp3()가 생성하는 "_partN.mp3" 패턴에서 원본 이름 추출
-    const partMatch = file.match(/^(.+)_part\d+\.mp3$/)
-    const baseName = partMatch ? partMatch[1] : file.replace(/\.mp3$/, '')
+    // splitMp3()가 생성하는 "_partN.mp3" 패턴에서 원본 이름 추출 (macOS NFD 정규화 대응)
+    const normalizedFile = file.normalize('NFC')
+    const partMatch = normalizedFile.match(/^(.+)_part\d+\.mp3$/)
+    const baseName = partMatch ? partMatch[1] : normalizedFile.replace(/\.mp3$/, '')
 
     if (!groups.has(baseName)) {
       groups.set(baseName, [])

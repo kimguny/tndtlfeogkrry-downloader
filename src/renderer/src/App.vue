@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { toSafeFileName } from '../../shared/config'
 import type { VideoItem } from './types'
 import { useDownloader } from './composables/useDownloader'
 import { useTranscriber } from './composables/useTranscriber'
@@ -62,7 +63,7 @@ watch(transcribeMessage, (val) => {
 
 async function handleTranscribe(video: { contentId: string; title: string }): Promise<void> {
   const savedPath = downloadedPaths.value[video.contentId]
-  const safeName = video.title.replace(/[/\\?%*:|"<>]/g, '_')
+  const safeName = toSafeFileName(video.title)
 
   if (savedPath) {
     const fileName = savedPath.split('/').pop() || `${safeName}.mp3`

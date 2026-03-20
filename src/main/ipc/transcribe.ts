@@ -5,7 +5,11 @@ import { unlink } from 'fs/promises'
 import { resolve } from 'path'
 import { IPC } from '../../shared/channels'
 import { IPC_EVENT } from '../../shared/channels'
-import { MAX_CONCURRENT_DOWNLOADS, MAX_CONCURRENT_TRANSCRIPTIONS } from '../../shared/config'
+import {
+  MAX_CONCURRENT_DOWNLOADS,
+  MAX_CONCURRENT_TRANSCRIPTIONS,
+  toSafeFileName
+} from '../../shared/config'
 import { loadGeminiApiKey } from '../services/gemini'
 import { transcribeWithRetry, groupMp3Files } from '../services/gemini'
 import { downloadOne } from '../services/download'
@@ -45,11 +49,22 @@ export function registerTranscribeHandlers(): void {
         }
       }
 
-      // mp3 분할 파일 검색
+      // mp3 분할 파일 검색 (macOS HFS+에서 한글 NFD 정규화 대응)
       const allFiles = readdirSync(dir).filter((f) => f.endsWith('.mp3')).sort()
+      const normalizedBaseName = baseName.normalize('NFC')
+      const escapedBaseName = normalizedBaseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const partRegex = new RegExp(`^${escapedBaseName}_part\\d+\\.mp3$`)
       const partFiles = allFiles
-        .filter((f) => f.match(new RegExp(`^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_part\\d+\\.mp3$`)))
+        .filter((f) => partRegex.test(f.normalize('NFC')))
         .map((f) => join(dir, f))
+
+      // 분할 파일도 없고 원본 mp3도 없으면 에러
+      if (partFiles.length === 0 && !existsSync(mp3Path)) {
+        return {
+          success: false,
+          error: `MP3 파일을 찾을 수 없습니다: ${basename(mp3Path)}. 먼저 MP3로 다운로드해주세요.`
+        }
+      }
       const filesToTranscribe = partFiles.length > 0 ? partFiles : [mp3Path]
       const totalParts = filesToTranscribe.length
       const texts: string[] = []
@@ -213,7 +228,7 @@ export function registerTranscribeHandlers(): void {
         while (nextDownloadIndex < videos.length) {
           const i = nextDownloadIndex++
           const video = videos[i]
-          const safeName = video.title.replace(/[/\\?%*:|"<>]/g, '_')
+          const safeName = toSafeFileName(video.title)
           const filePath = resolve(folder, `${safeName}.mp3`)
           const result = await downloadOne(video.contentId, filePath, event.sender, 'mp3')
           downloadResults[i] = { title: video.title, success: result.success, error: result.error }

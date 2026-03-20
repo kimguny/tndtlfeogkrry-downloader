@@ -1,7 +1,7 @@
 import { BrowserWindow, ipcMain, dialog } from 'electron'
 import { resolve } from 'path'
 import { IPC } from '../../shared/channels'
-import { MAX_CONCURRENT_DOWNLOADS } from '../../shared/config'
+import { MAX_CONCURRENT_DOWNLOADS, toSafeFileName } from '../../shared/config'
 import { downloadOne } from '../services/download'
 
 export function registerDownloadHandlers(): void {
@@ -17,7 +17,7 @@ export function registerDownloadHandlers(): void {
       const mainWin = BrowserWindow.fromWebContents(event.sender)
       if (!mainWin) return { success: false, error: 'No window found' }
 
-      const safeName = title.replace(/[/\\?%*:|"<>]/g, '_')
+      const safeName = toSafeFileName(title)
       const ext = format === 'mp3' ? 'mp3' : 'mp4'
       let filePath: string
 
@@ -78,7 +78,7 @@ export function registerDownloadHandlers(): void {
         while (nextIndex < videos.length) {
           const i = nextIndex++
           const video = videos[i]
-          const safeName = video.title.replace(/[/\\?%*:|"<>]/g, '_')
+          const safeName = toSafeFileName(video.title)
           const filePath = resolve(folder, `${safeName}.${ext}`)
           const result = await downloadOne(video.contentId, filePath, event.sender, format)
           results[i] = { title: video.title, contentId: video.contentId, success: result.success, error: result.error, filePath: result.filePath }
