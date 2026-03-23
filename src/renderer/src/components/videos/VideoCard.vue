@@ -7,7 +7,8 @@ import {
   HardDrive,
   Calendar,
   FileText,
-  Check
+  Check,
+  Lock
 } from 'lucide-vue-next';
 import type { TranscribeStatus } from '../../composables/useTranscriber';
 import { computed } from 'vue';
@@ -68,8 +69,12 @@ const isTranscribeDone = computed(() => props.transcribeStatus?.status === 'done
 
 <template>
   <div
-    class="group flex flex-col sm:flex-row items-stretch gap-4 sm:gap-5 p-4 sm:pr-6 border border-border/60 rounded-[20px] sm:rounded-[24px] bg-surface transition-all duration-300 hover:border-primary/40 hover:shadow-md hover:shadow-primary/5 relative overflow-hidden"
-    :class="{ 'border-primary/60 bg-primary/5': selected }"
+    class="group flex flex-col sm:flex-row items-stretch gap-4 sm:gap-5 p-4 sm:pr-6 border border-border/60 rounded-[20px] sm:rounded-[24px] bg-surface transition-all duration-300 relative overflow-hidden"
+    :class="{
+      'border-primary/60 bg-primary/5': selected,
+      'opacity-50 cursor-not-allowed': video.available === false,
+      'hover:border-primary/40 hover:shadow-md hover:shadow-primary/5': video.available !== false
+    }"
   >
     <!-- Background Progress Bar -->
     <div
@@ -80,6 +85,7 @@ const isTranscribeDone = computed(() => props.transcribeStatus?.status === 'done
 
     <!-- Checkbox -->
     <button
+      v-if="video.available !== false"
       class="relative z-10 hidden sm:flex items-center justify-center shrink-0 w-6 h-6 my-auto rounded-md border-2 cursor-pointer transition-all duration-200"
       :class="
         selected
@@ -192,6 +198,17 @@ const isTranscribeDone = computed(() => props.transcribeStatus?.status === 'done
           v-if="statusLabel"
           class="hidden sm:block text-[10px] font-semibold text-text-3 text-center whitespace-nowrap"
           >{{ statusLabel }}</span
+        >
+      </div>
+
+      <div
+        v-else-if="video.available === false"
+        class="flex flex-row sm:flex-col items-center justify-center gap-1.5 px-2 sm:px-3 min-w-0 sm:min-w-[80px]"
+        title="아직 공개되지 않은 콘텐츠입니다"
+      >
+        <Lock :size="20" sm:size="24" class="text-text-3" />
+        <span class="hidden sm:block text-[10px] font-bold text-text-3 whitespace-nowrap"
+          >미공개</span
         >
       </div>
 

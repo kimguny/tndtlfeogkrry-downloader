@@ -52,8 +52,9 @@ const selectedIds = ref<Set<string>>(new Set());
 const showDropdown = ref(false);
 
 const selectedCount = computed(() => selectedIds.value.size);
+const availableVideos = computed(() => props.videos.filter((v) => v.available !== false));
 const isAllSelected = computed(
-  () => props.videos.length > 0 && selectedIds.value.size === props.videos.length
+  () => availableVideos.value.length > 0 && selectedIds.value.size === availableVideos.value.length
 );
 const selectedVideos = computed(() =>
   props.videos.filter((v) => selectedIds.value.has(v.contentId))
@@ -73,7 +74,7 @@ function toggleSelectAll(): void {
   if (isAllSelected.value) {
     selectedIds.value = new Set();
   } else {
-    selectedIds.value = new Set(props.videos.map((v) => v.contentId));
+    selectedIds.value = new Set(availableVideos.value.map((v) => v.contentId));
   }
 }
 

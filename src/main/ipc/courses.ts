@@ -94,6 +94,7 @@ export function registerCoursesHandlers(): void {
         fileSize: number;
         thumbnailUrl: string;
         weekPosition: number;
+        available: boolean;
       }
 
       const videos: VideoItem[] = [];
@@ -109,13 +110,15 @@ export function registerCoursesHandlers(): void {
           ) {
             const data = item.content_data.item_content_data;
             if (data.content_id) {
+              const available = data.content_id !== 'not_open';
               videos.push({
                 title: item.title,
                 contentId: data.content_id,
                 duration: data.duration || 0,
                 fileSize: data.total_file_size || 0,
                 thumbnailUrl: data.thumbnail_url || '',
-                weekPosition: item.content_data.week_position || 0
+                weekPosition: item.content_data.week_position || 0,
+                available
               });
             }
           }

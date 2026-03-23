@@ -13,6 +13,7 @@ export interface VideoItem {
   fileSize: number; // 바이트 단위
   thumbnailUrl: string;
   weekPosition: number; // 주차 (모듈 내 위치)
+  available: boolean; // content_id가 유효한지 (not_open 등은 false)
 }
 
 /** 다운로드/변환 요청용 최소 참조 (contentId + title만 필요) */
