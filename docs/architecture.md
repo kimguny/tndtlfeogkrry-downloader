@@ -117,15 +117,18 @@ renderer/        → shared/types (re-export)  (프론트엔드)
 ## 새 기능 추가 가이드
 
 ### 새 IPC 채널 추가
+
 1. `src/shared/channels.ts` — `IPC` 또는 `IPC_EVENT`에 채널명 상수 추가
 2. `src/main/ipc/` — 해당 도메인 파일에 핸들러 구현
 3. `src/preload/index.ts` — API 메서드 추가
 4. `src/preload/index.d.ts` — 타입 정의 추가
 
 ### 새 서비스 로직 추가
+
 1. `src/main/services/` — 비즈니스 로직 파일 생성/수정
 2. `src/main/ipc/` — 해당 IPC 핸들러에서 서비스 import 및 호출
 
 ### 새 공유 타입 추가
+
 1. `src/shared/types.ts` — 타입 정의
 2. 필요 시 `src/renderer/src/types/index.ts`에 re-export 추가

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { Info } from 'lucide-vue-next'
+import { Info } from 'lucide-vue-next';
 
 defineProps<{
-  message: string
-}>()
+  message: string;
+}>();
 </script>
 
 <template>

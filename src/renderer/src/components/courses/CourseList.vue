@@ -1,29 +1,35 @@
 <script setup lang="ts">
-import { RefreshCw, LogIn, Loader2, BookOpen } from 'lucide-vue-next'
-import type { CourseItem } from '../../types'
-import CourseCard from './CourseCard.vue'
+import { RefreshCw, LogIn, Loader2, BookOpen } from 'lucide-vue-next';
+import type { CourseItem } from '../../types';
+import CourseCard from './CourseCard.vue';
 
 defineProps<{
-  courses: CourseItem[]
-  isLoading: boolean
-}>()
+  courses: CourseItem[];
+  isLoading: boolean;
+}>();
 
 const emit = defineEmits<{
-  refresh: []
-  relogin: []
-  select: [course: CourseItem]
-}>()
+  refresh: [];
+  relogin: [];
+  select: [course: CourseItem];
+}>();
 </script>
 
 <template>
   <div class="h-full flex flex-col">
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 sm:mb-10 gap-6 sm:gap-4">
+    <div
+      class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 sm:mb-10 gap-6 sm:gap-4"
+    >
       <div>
-        <h2 class="text-2xl sm:text-3xl font-black text-text-1 flex items-center gap-3 tracking-tight">
+        <h2
+          class="text-2xl sm:text-3xl font-black text-text-1 flex items-center gap-3 tracking-tight"
+        >
           <BookOpen class="text-primary" :size="28" />
           내 강의 목록
         </h2>
-        <p class="text-sm sm:text-[15px] text-text-3 mt-1 sm:mt-2 font-medium">다운로드할 과목을 선택하여 강의 영상을 확인하세요.</p>
+        <p class="text-sm sm:text-[15px] text-text-3 mt-1 sm:mt-2 font-medium">
+          다운로드할 과목을 선택하여 강의 영상을 확인하세요.
+        </p>
       </div>
 
       <div class="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
@@ -47,12 +53,19 @@ const emit = defineEmits<{
     </div>
 
     <!-- Empty State -->
-    <div v-if="!isLoading && courses.length === 0" class="flex-1 flex flex-col items-center justify-center text-text-3 py-20">
-      <div class="w-24 h-24 rounded-3xl bg-surface-mute flex items-center justify-center mb-6 shadow-inner">
+    <div
+      v-if="!isLoading && courses.length === 0"
+      class="flex-1 flex flex-col items-center justify-center text-text-3 py-20"
+    >
+      <div
+        class="w-24 h-24 rounded-3xl bg-surface-mute flex items-center justify-center mb-6 shadow-inner"
+      >
         <BookOpen :size="40" class="text-text-3 opacity-50" />
       </div>
       <p class="text-xl font-bold text-text-2">수강 중인 과목이 없습니다.</p>
-      <p class="text-sm mt-2 font-medium opacity-70">LMS에 과목이 정상적으로 등록되어 있는지 확인해주세요.</p>
+      <p class="text-sm mt-2 font-medium opacity-70">
+        LMS에 과목이 정상적으로 등록되어 있는지 확인해주세요.
+      </p>
     </div>
 
     <!-- Course Grid -->

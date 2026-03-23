@@ -1,27 +1,27 @@
-import { app, BrowserWindow } from 'electron'
-import { electronApp, optimizer } from '@electron-toolkit/utils'
-import { createWindow, destroyLmsWin } from './window'
-import { registerAllIpcHandlers } from './ipc'
+import { app, BrowserWindow } from 'electron';
+import { electronApp, optimizer } from '@electron-toolkit/utils';
+import { createWindow, destroyLmsWin } from './window';
+import { registerAllIpcHandlers } from './ipc';
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.electron');
 
   app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window)
-  })
+    optimizer.watchWindowShortcuts(window);
+  });
 
-  registerAllIpcHandlers()
-  createWindow()
+  registerAllIpcHandlers();
+  createWindow();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
-})
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
 
-app.on('before-quit', destroyLmsWin)
+app.on('before-quit', destroyLmsWin);
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    app.quit()
+    app.quit();
   }
-})
+});

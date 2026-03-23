@@ -54,22 +54,26 @@ pnpm build:win        # Windows 패키징
 ## 아키텍처 패턴
 
 ### IPC 통신
+
 - **채널명**: `src/shared/channels.ts`의 `IPC`/`IPC_EVENT` 상수 사용 (문자열 하드코딩 금지)
 - **Invoke/Handle**: `ipcRenderer.invoke` ↔ `ipcMain.handle` (요청-응답)
 - **Send/On**: `sender.send` → `ipcRenderer.on` (진행률 등 단방향 이벤트)
 
 ### LMS 세션
+
 - `persist:lms` 파티션의 별도 BrowserWindow로 Canvas LMS 로그인 세션 유지
 - `lmsWin`은 `window.ts`의 싱글턴, 닫기 시 숨기기만 함
 - `getLmsSession().fetch()`로 인증된 API 호출
 
 ### 다운로드/변환 파이프라인
+
 1. `content.php` API → XML 파싱 → 미디어 URL 추출
 2. HTTPS 다운로드 (진행률 이벤트 발송)
 3. MP3 요청 시: MP4 → FFmpeg MP3 변환 → 19MB 초과 시 자동 분할
 4. 텍스트 변환: Gemini API로 분할 파일 순차 변환 → 병합
 
 ### 동시성
+
 - 다운로드: 최대 3개 병렬 (worker 패턴)
 - 텍스트 변환: 최대 2개 병렬
 

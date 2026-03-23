@@ -98,54 +98,54 @@
 ```typescript
 // 강좌
 interface CourseItem {
-  id: string
-  name: string       // shortName
-  term: string       // 학기
+  id: string;
+  name: string; // shortName
+  term: string; // 학기
 }
 
 // 영상
 interface VideoItem {
-  title: string
-  contentId: string
-  duration: number      // 초 단위
-  fileSize: number      // 바이트 단위
-  thumbnailUrl: string
-  weekPosition: number  // 주차
+  title: string;
+  contentId: string;
+  duration: number; // 초 단위
+  fileSize: number; // 바이트 단위
+  thumbnailUrl: string;
+  weekPosition: number; // 주차
 }
 
 // 다운로드/변환 요청용 최소 참조
 interface VideoRef {
-  contentId: string
-  title: string
+  contentId: string;
+  title: string;
 }
 ```
 
 ## 설정 상수 (`src/shared/config.ts`)
 
-| 상수 | 값 | 설명 |
-|------|-----|------|
-| `LMS_SESSION_PARTITION` | `persist:lms` | LMS 세션 파티션명 |
-| `SPLIT_THRESHOLD_BYTES` | 19MB | MP3 분할 기준 |
-| `MAX_CONCURRENT_DOWNLOADS` | 3 | 동시 다운로드 수 |
-| `MAX_CONCURRENT_TRANSCRIPTIONS` | 2 | 동시 변환 수 |
-| `GEMINI_MODEL` | `gemini-2.0-flash` | STT 모델명 |
-| `GEMINI_MAX_RETRIES` | 3 | API 재시도 횟수 |
-| `DOWNLOAD_TIMEOUT_MS` | 300,000 | 다운로드 타임아웃 |
+| 상수                            | 값                 | 설명              |
+| ------------------------------- | ------------------ | ----------------- |
+| `LMS_SESSION_PARTITION`         | `persist:lms`      | LMS 세션 파티션명 |
+| `SPLIT_THRESHOLD_BYTES`         | 19MB               | MP3 분할 기준     |
+| `MAX_CONCURRENT_DOWNLOADS`      | 3                  | 동시 다운로드 수  |
+| `MAX_CONCURRENT_TRANSCRIPTIONS` | 2                  | 동시 변환 수      |
+| `GEMINI_MODEL`                  | `gemini-2.0-flash` | STT 모델명        |
+| `GEMINI_MAX_RETRIES`            | 3                  | API 재시도 횟수   |
+| `DOWNLOAD_TIMEOUT_MS`           | 300,000            | 다운로드 타임아웃 |
 
 ## 동시성 제한
 
-| 작업 | 최대 동시 수 | 상수 | 구현 |
-|------|-------------|------|------|
-| 영상 다운로드 | 3 | `MAX_CONCURRENT_DOWNLOADS` | Worker Pool |
-| 텍스트 변환 | 2 | `MAX_CONCURRENT_TRANSCRIPTIONS` | Worker Pool |
-| Gemini API 재시도 | 3회 | `GEMINI_MAX_RETRIES` | 지수 백오프 (2s, 4s, 8s) |
+| 작업              | 최대 동시 수 | 상수                            | 구현                     |
+| ----------------- | ------------ | ------------------------------- | ------------------------ |
+| 영상 다운로드     | 3            | `MAX_CONCURRENT_DOWNLOADS`      | Worker Pool              |
+| 텍스트 변환       | 2            | `MAX_CONCURRENT_TRANSCRIPTIONS` | Worker Pool              |
+| Gemini API 재시도 | 3회          | `GEMINI_MAX_RETRIES`            | 지수 백오프 (2s, 4s, 8s) |
 
 ## 외부 API 엔드포인트
 
-| API | 용도 |
-|-----|------|
-| `canvas.ssu.ac.kr/login` | SSO 로그인 페이지 |
-| `canvas.ssu.ac.kr/api/v1/dashboard/dashboard_cards` | 수강 강좌 목록 |
+| API                                                      | 용도                |
+| -------------------------------------------------------- | ------------------- |
+| `canvas.ssu.ac.kr/login`                                 | SSO 로그인 페이지   |
+| `canvas.ssu.ac.kr/api/v1/dashboard/dashboard_cards`      | 수강 강좌 목록      |
 | `canvas.ssu.ac.kr/learningx/api/v1/courses/{id}/modules` | 강좌 모듈/영상 목록 |
-| `commons.ssu.ac.kr/.../content.php?content_id={id}` | 영상 URL 조회 (XML) |
-| `generativelanguage.googleapis.com` (via SDK) | Gemini STT |
+| `commons.ssu.ac.kr/.../content.php?content_id={id}`      | 영상 URL 조회 (XML) |
+| `generativelanguage.googleapis.com` (via SDK)            | Gemini STT          |

@@ -15,10 +15,10 @@ export const IPC = {
   SELECT_FOLDER: 'select-folder',
   SELECT_DOWNLOAD_FOLDER: 'select-download-folder',
   CHECK_FOR_UPDATE: 'check-for-update'
-} as const
+} as const;
 
 /** ipcMain.send / ipcRenderer.on 이벤트 채널명 */
 export const IPC_EVENT = {
   DOWNLOAD_PROGRESS: 'download-progress',
   TRANSCRIBE_PROGRESS: 'transcribe-progress'
-} as const
+} as const;

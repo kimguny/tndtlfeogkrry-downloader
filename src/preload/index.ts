@@ -1,23 +1,29 @@
-import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
-import { IPC, IPC_EVENT } from '../shared/channels'
-import type { CourseItem, VideoItem, VideoRef, DownloadProgressData, TranscribeProgressData } from '../shared/types'
+import { contextBridge, ipcRenderer } from 'electron';
+import { electronAPI } from '@electron-toolkit/preload';
+import { IPC, IPC_EVENT } from '../shared/channels';
+import type {
+  CourseItem,
+  VideoItem,
+  VideoRef,
+  DownloadProgressData,
+  TranscribeProgressData
+} from '../shared/types';
 
 const api = {
   openLogin: (): Promise<{ success: boolean }> => ipcRenderer.invoke(IPC.OPEN_LOGIN),
 
   fetchCourses: (): Promise<{
-    success: boolean
-    error?: string
-    courses?: CourseItem[]
+    success: boolean;
+    error?: string;
+    courses?: CourseItem[];
   }> => ipcRenderer.invoke(IPC.FETCH_COURSES),
 
   fetchModules: (
     courseId: string
   ): Promise<{
-    success: boolean
-    error?: string
-    videos?: VideoItem[]
+    success: boolean;
+    error?: string;
+    videos?: VideoItem[];
   }> => ipcRenderer.invoke(IPC.FETCH_MODULES, courseId),
 
   downloadVideo: (
@@ -33,19 +39,25 @@ const api = {
     format?: 'mp4' | 'mp3',
     folderPath?: string
   ): Promise<{
-    success: boolean
-    error?: string
-    results?: { title: string; contentId: string; success: boolean; error?: string; filePath?: string }[]
-    successCount?: number
-    total?: number
+    success: boolean;
+    error?: string;
+    results?: {
+      title: string;
+      contentId: string;
+      success: boolean;
+      error?: string;
+      filePath?: string;
+    }[];
+    successCount?: number;
+    total?: number;
   }> => ipcRenderer.invoke(IPC.DOWNLOAD_ALL, videos, format || 'mp4', folderPath),
 
   onDownloadProgress: (callback: (data: DownloadProgressData) => void): void => {
-    ipcRenderer.on(IPC_EVENT.DOWNLOAD_PROGRESS, (_event, data) => callback(data))
+    ipcRenderer.on(IPC_EVENT.DOWNLOAD_PROGRESS, (_event, data) => callback(data));
   },
 
   removeDownloadProgress: (): void => {
-    ipcRenderer.removeAllListeners(IPC_EVENT.DOWNLOAD_PROGRESS)
+    ipcRenderer.removeAllListeners(IPC_EVENT.DOWNLOAD_PROGRESS);
   },
 
   // --- Gemini STT ---
@@ -65,11 +77,11 @@ const api = {
   transcribeBatch: (
     dirPath: string
   ): Promise<{
-    success: boolean
-    error?: string
-    results?: { fileName: string; success: boolean; error?: string }[]
-    successCount?: number
-    total?: number
+    success: boolean;
+    error?: string;
+    results?: { fileName: string; success: boolean; error?: string }[];
+    successCount?: number;
+    total?: number;
   }> => ipcRenderer.invoke(IPC.TRANSCRIBE_BATCH, dirPath),
 
   openFile: (filePath: string): Promise<{ success: boolean }> =>
@@ -85,39 +97,39 @@ const api = {
     videos: VideoRef[],
     folderPath?: string
   ): Promise<{
-    success: boolean
-    error?: string
-    downloadSuccessCount?: number
-    transcribeSuccessCount?: number
-    total?: number
+    success: boolean;
+    error?: string;
+    downloadSuccessCount?: number;
+    transcribeSuccessCount?: number;
+    total?: number;
   }> => ipcRenderer.invoke(IPC.DOWNLOAD_AND_TRANSCRIBE_ALL, videos, folderPath),
 
   onTranscribeProgress: (callback: (data: TranscribeProgressData) => void): void => {
-    ipcRenderer.on(IPC_EVENT.TRANSCRIBE_PROGRESS, (_event, data) => callback(data))
+    ipcRenderer.on(IPC_EVENT.TRANSCRIBE_PROGRESS, (_event, data) => callback(data));
   },
 
   removeTranscribeProgress: (): void => {
-    ipcRenderer.removeAllListeners(IPC_EVENT.TRANSCRIBE_PROGRESS)
+    ipcRenderer.removeAllListeners(IPC_EVENT.TRANSCRIBE_PROGRESS);
   },
 
   checkForUpdate: (): Promise<{
-    hasUpdate: boolean
-    currentVersion: string
-    latestVersion?: string
-    downloadUrl?: string
+    hasUpdate: boolean;
+    currentVersion: string;
+    latestVersion?: string;
+    downloadUrl?: string;
   }> => ipcRenderer.invoke(IPC.CHECK_FOR_UPDATE)
-}
+};
 
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
+    contextBridge.exposeInMainWorld('electron', electronAPI);
+    contextBridge.exposeInMainWorld('api', api);
   } catch (error) {
-    console.error(error)
+    console.error(error);
   }
 } else {
   // @ts-ignore (define in dts)
-  window.electron = electronAPI
+  window.electron = electronAPI;
   // @ts-ignore (define in dts)
-  window.api = api
+  window.api = api;
 }

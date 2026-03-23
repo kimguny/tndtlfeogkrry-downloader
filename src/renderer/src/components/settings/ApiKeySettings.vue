@@ -1,33 +1,38 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Key, Check, Trash2, X, Eye, EyeOff } from 'lucide-vue-next'
+import { ref } from 'vue';
+import { Key, Check, Trash2, X, Eye, EyeOff } from 'lucide-vue-next';
 
-const props = defineProps<{
-  hasApiKey: boolean
-}>()
+defineProps<{
+  hasApiKey: boolean;
+}>();
 
 const emit = defineEmits<{
-  save: [key: string]
-  delete: []
-  close: []
-}>()
+  save: [key: string];
+  delete: [];
+  close: [];
+}>();
 
-const keyInput = ref('')
-const showKey = ref(false)
-const isSaving = ref(false)
+const keyInput = ref('');
+const showKey = ref(false);
+const isSaving = ref(false);
 
 async function handleSave(): Promise<void> {
-  if (!keyInput.value.trim()) return
-  isSaving.value = true
-  emit('save', keyInput.value.trim())
-  keyInput.value = ''
-  isSaving.value = false
+  if (!keyInput.value.trim()) return;
+  isSaving.value = true;
+  emit('save', keyInput.value.trim());
+  keyInput.value = '';
+  isSaving.value = false;
 }
 </script>
 
 <template>
-  <div class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center" @click.self="emit('close')">
-    <div class="bg-surface rounded-3xl shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-border/50">
+  <div
+    class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center"
+    @click.self="emit('close')"
+  >
+    <div
+      class="bg-surface rounded-3xl shadow-2xl w-full max-w-md mx-4 overflow-hidden border border-border/50"
+    >
       <div class="flex items-center justify-between px-7 py-5 border-b border-border/50">
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center">
@@ -45,7 +50,9 @@ async function handleSave(): Promise<void> {
 
       <div class="p-7">
         <div v-if="hasApiKey" class="space-y-4">
-          <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-success/10 border border-success/20">
+          <div
+            class="flex items-center gap-3 px-4 py-3 rounded-xl bg-success/10 border border-success/20"
+          >
             <Check :size="18" class="text-success" />
             <span class="text-sm font-semibold text-success">API 키가 설정되어 있습니다</span>
           </div>

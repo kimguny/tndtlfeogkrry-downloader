@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { toSafeFileName } from '../../shared/config'
-import type { VideoItem } from './types'
-import { useDownloader } from './composables/useDownloader'
-import { useTranscriber } from './composables/useTranscriber'
-import Sidebar from './components/layout/Sidebar.vue'
-import StatusMessage from './components/layout/StatusMessage.vue'
-import LoginScreen from './components/login/LoginScreen.vue'
-import CourseList from './components/courses/CourseList.vue'
-import VideoList from './components/videos/VideoList.vue'
-import ApiKeySettings from './components/settings/ApiKeySettings.vue'
+import { ref, onMounted, watch } from 'vue';
+import { toSafeFileName } from '../../shared/config';
+import type { VideoItem } from './types';
+import { useDownloader } from './composables/useDownloader';
+import { useTranscriber } from './composables/useTranscriber';
+import Sidebar from './components/layout/Sidebar.vue';
+import StatusMessage from './components/layout/StatusMessage.vue';
+import LoginScreen from './components/login/LoginScreen.vue';
+import CourseList from './components/courses/CourseList.vue';
+import VideoList from './components/videos/VideoList.vue';
+import ApiKeySettings from './components/settings/ApiKeySettings.vue';
 
 const {
   isLoggedIn,
@@ -35,7 +35,7 @@ const {
   download,
   formatDuration,
   formatSize
-} = useDownloader()
+} = useDownloader();
 
 const {
   hasApiKey,
@@ -48,78 +48,87 @@ const {
   deleteApiKey,
   transcribe,
   downloadAndTranscribeAll
-} = useTranscriber()
+} = useTranscriber();
 
-const showSettings = ref(false)
+const showSettings = ref(false);
 
 onMounted(() => {
-  checkApiKey()
-})
+  checkApiKey();
+});
 
 // transcribeMessage가 있으면 message에 반영
 watch(transcribeMessage, (val) => {
-  if (val) message.value = val
-})
+  if (val) message.value = val;
+});
 
 async function handleTranscribe(video: { contentId: string; title: string }): Promise<void> {
-  const savedPath = downloadedPaths.value[video.contentId]
-  const safeName = toSafeFileName(video.title)
+  const savedPath = downloadedPaths.value[video.contentId];
+  const safeName = toSafeFileName(video.title);
 
   if (savedPath) {
-    const fileName = savedPath.split('/').pop() || `${safeName}.mp3`
-    await transcribe(savedPath, fileName)
-    return
+    const fileName = savedPath.split('/').pop() || `${safeName}.mp3`;
+    await transcribe(savedPath, fileName);
+    return;
   }
 
   // 다운로드 경로가 없으면 폴더 선택
-  let folder = downloadFolder.value
+  let folder = downloadFolder.value;
 
   if (!folder) {
-    const result = await window.api.selectFolder()
-    if (!result.success || !result.folderPath) return
-    folder = result.folderPath
+    const result = await window.api.selectFolder();
+    if (!result.success || !result.folderPath) return;
+    folder = result.folderPath;
   }
 
-  const filePath = `${folder}/${safeName}.mp3`
-  await transcribe(filePath, `${safeName}.mp3`)
+  const filePath = `${folder}/${safeName}.mp3`;
+  await transcribe(filePath, `${safeName}.mp3`);
 }
 
 async function handleDownloadSelected(selected: VideoItem[]): Promise<void> {
-  await downloadAll(selected)
+  await downloadAll(selected);
 }
 
 async function handleTranscribeAll(): Promise<void> {
-  if (videos.value.length === 0) return
+  if (videos.value.length === 0) return;
   await downloadAndTranscribeAll(
     videos.value.map((v) => ({ contentId: v.contentId, title: v.title })),
     downloadFolder.value ?? undefined
-  )
+  );
 }
 
 async function handleTranscribeSelected(selected: VideoItem[]): Promise<void> {
-  if (selected.length === 0) return
+  if (selected.length === 0) return;
   await downloadAndTranscribeAll(
     selected.map((v) => ({ contentId: v.contentId, title: v.title })),
     downloadFolder.value ?? undefined
-  )
+  );
 }
 
 async function handleSaveApiKey(key: string): Promise<void> {
-  await saveApiKey(key)
-  showSettings.value = false
+  await saveApiKey(key);
+  showSettings.value = false;
 }
 
 async function handleDeleteApiKey(): Promise<void> {
-  await deleteApiKey()
+  await deleteApiKey();
 }
 </script>
 
 <template>
-  <div class="flex h-screen bg-surface text-text-1 transition-colors duration-200 overflow-hidden font-sans">
-    <Sidebar :is-logged-in="isLoggedIn" :has-api-key="hasApiKey" @login="login" @open-settings="showSettings = true" />
+  <div
+    class="flex h-screen bg-surface text-text-1 transition-colors duration-200 overflow-hidden font-sans"
+  >
+    <Sidebar
+      :is-logged-in="isLoggedIn"
+      :has-api-key="hasApiKey"
+      @login="login"
+      @open-settings="showSettings = true"
+    />
 
     <main class="flex-1 flex flex-col h-full overflow-hidden relative">
-      <div class="flex-1 overflow-y-auto px-4 sm:px-6 md:px-10 py-6 sm:py-10 w-full max-w-6xl mx-auto">
+      <div
+        class="flex-1 overflow-y-auto px-4 sm:px-6 md:px-10 py-6 sm:py-10 w-full max-w-6xl mx-auto"
+      >
         <Transition name="fade" mode="out-in">
           <LoginScreen v-if="!isLoggedIn" @login="login" />
 
@@ -136,6 +145,7 @@ async function handleDeleteApiKey(): Promise<void> {
 
               <VideoList
                 v-else
+                v-model:download-format="downloadFormat"
                 :videos="videos"
                 :is-loading="isLoading"
                 :is-downloading-all="isDownloadingAll"
@@ -149,7 +159,6 @@ async function handleDeleteApiKey(): Promise<void> {
                 :transcribe-progress-map="transcribeProgressMap"
                 :transcribe-status-map="transcribeStatusMap"
                 :download-folder="downloadFolder"
-                v-model:download-format="downloadFormat"
                 @back="goBackToCourses"
                 @download-all="downloadAll"
                 @download-selected="handleDownloadSelected"

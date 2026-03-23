@@ -4,4 +4,4 @@ export type {
   VideoRef,
   DownloadProgressData,
   TranscribeProgressData
-} from '../../../shared/types'
+} from '../../../shared/types';

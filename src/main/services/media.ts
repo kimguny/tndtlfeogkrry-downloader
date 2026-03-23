@@ -1,14 +1,14 @@
-import { basename, dirname, extname, join } from 'path'
-import { statSync } from 'fs'
-import { unlink } from 'fs/promises'
-import ffmpeg from 'fluent-ffmpeg'
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
-import { SPLIT_THRESHOLD_BYTES } from '../../shared/config'
-import { IPC_EVENT } from '../../shared/channels'
+import { basename, dirname, extname, join } from 'path';
+import { statSync } from 'fs';
+import { unlink } from 'fs/promises';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import { SPLIT_THRESHOLD_BYTES } from '../../shared/config';
+import { IPC_EVENT } from '../../shared/channels';
 
 // asar 패키징 시 경로 보정
-const ffmpegPath = ffmpegInstaller.path.replace('app.asar', 'app.asar.unpacked')
-ffmpeg.setFfmpegPath(ffmpegPath)
+const ffmpegPath = ffmpegInstaller.path.replace('app.asar', 'app.asar.unpacked');
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 /** MP4에서 오디오만 추출하여 MP3로 변환. libmp3lame 코덱, 품질 2 (~190kbps VBR). */
 export function convertToMp3(mp4Path: string, mp3Path: string): Promise<void> {
@@ -20,17 +20,17 @@ export function convertToMp3(mp4Path: string, mp3Path: string): Promise<void> {
       .output(mp3Path)
       .on('end', () => res())
       .on('error', (err) => rej(err))
-      .run()
-  })
+      .run();
+  });
 }
 
 export function getAudioDuration(filePath: string): Promise<number> {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(filePath, (err, metadata) => {
-      if (err) return reject(err)
-      resolve(metadata.format.duration || 0)
-    })
-  })
+      if (err) return reject(err);
+      resolve(metadata.format.duration || 0);
+    });
+  });
 }
 
 /**
@@ -44,21 +44,21 @@ export async function splitMp3(
   contentId: string,
   sender: Electron.WebContents
 ): Promise<string[]> {
-  const fileSize = statSync(mp3Path).size
-  if (fileSize <= SPLIT_THRESHOLD_BYTES) return [mp3Path]
+  const fileSize = statSync(mp3Path).size;
+  if (fileSize <= SPLIT_THRESHOLD_BYTES) return [mp3Path];
 
-  const duration = await getAudioDuration(mp3Path)
+  const duration = await getAudioDuration(mp3Path);
   // 각 파트가 ~19MB가 되도록 분할 수 계산
-  const partCount = Math.ceil(fileSize / (19 * 1024 * 1024))
-  const partDuration = duration / partCount
+  const partCount = Math.ceil(fileSize / (19 * 1024 * 1024));
+  const partDuration = duration / partCount;
 
-  const dir = dirname(mp3Path)
-  const name = basename(mp3Path, extname(mp3Path))
-  const parts: string[] = []
+  const dir = dirname(mp3Path);
+  const name = basename(mp3Path, extname(mp3Path));
+  const parts: string[] = [];
 
   for (let i = 0; i < partCount; i++) {
-    const partPath = join(dir, `${name}_part${i + 1}.mp3`)
-    const startTime = i * partDuration
+    const partPath = join(dir, `${name}_part${i + 1}.mp3`);
+    const startTime = i * partDuration;
 
     sender.send(IPC_EVENT.DOWNLOAD_PROGRESS, {
       contentId,
@@ -68,7 +68,7 @@ export async function splitMp3(
       status: 'splitting',
       splitCurrent: i + 1,
       splitTotal: partCount
-    })
+    });
 
     await new Promise<void>((resolve, reject) => {
       ffmpeg(mp3Path)
@@ -78,13 +78,13 @@ export async function splitMp3(
         .output(partPath)
         .on('end', () => resolve())
         .on('error', (err) => reject(err))
-        .run()
-    })
+        .run();
+    });
 
-    parts.push(partPath)
+    parts.push(partPath);
   }
 
-  await unlink(mp3Path)
+  await unlink(mp3Path);
 
   sender.send(IPC_EVENT.DOWNLOAD_PROGRESS, {
     contentId,
@@ -93,7 +93,7 @@ export async function splitMp3(
     percent: 100,
     status: 'split-done',
     splitTotal: partCount
-  })
+  });
 
-  return parts
+  return parts;
 }

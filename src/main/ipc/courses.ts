@@ -1,15 +1,15 @@
-import { ipcMain } from 'electron'
-import { IPC } from '../../shared/channels'
-import { getOrCreateLmsWin } from '../window'
+import { ipcMain } from 'electron';
+import { IPC } from '../../shared/channels';
+import { getOrCreateLmsWin } from '../window';
 
 export function registerCoursesHandlers(): void {
   ipcMain.handle(IPC.FETCH_COURSES, async () => {
     try {
-      const win = getOrCreateLmsWin()
-      const currentUrl = win.webContents.getURL()
+      const win = getOrCreateLmsWin();
+      const currentUrl = win.webContents.getURL();
 
       if (!currentUrl.includes('canvas.ssu.ac.kr') || currentUrl.includes('/login')) {
-        throw new Error('로그인이 필요합니다. 다시 로그인해주세요.')
+        throw new Error('로그인이 필요합니다. 다시 로그인해주세요.');
       }
 
       // LMS 창 컨텍스트에서 Canvas API 호출 (세션 쿠키 자동 포함)
@@ -21,7 +21,7 @@ export function registerCoursesHandlers(): void {
           const text = await res.text();
           return JSON.parse(text.replace(/^while\\(1\\);/, ''));
         })()
-      `)
+      `);
 
       return {
         success: true,
@@ -30,24 +30,24 @@ export function registerCoursesHandlers(): void {
           name: c.shortName,
           term: c.term
         }))
-      }
+      };
     } catch (err) {
-      const msg = (err as Error).message
+      const msg = (err as Error).message;
       if (msg.includes('401') || msg.includes('403')) {
-        return { success: false, error: '로그인이 만료되었습니다. 다시 로그인해주세요.' }
+        return { success: false, error: '로그인이 만료되었습니다. 다시 로그인해주세요.' };
       }
-      return { success: false, error: msg }
+      return { success: false, error: msg };
     }
-  })
+  });
 
   ipcMain.handle(IPC.FETCH_MODULES, async (_event, courseId: string) => {
     try {
-      const win = getOrCreateLmsWin()
-      const currentUrl = win.webContents.getURL()
-      console.log('현재 lmsWin URL:', currentUrl)
+      const win = getOrCreateLmsWin();
+      const currentUrl = win.webContents.getURL();
+      console.log('현재 lmsWin URL:', currentUrl);
 
       if (!currentUrl.includes('canvas.ssu.ac.kr') || currentUrl.includes('/login')) {
-        throw new Error('로그인이 필요합니다. 다시 로그인해주세요.')
+        throw new Error('로그인이 필요합니다. 다시 로그인해주세요.');
       }
 
       // LearningX API는 xn_api_token(Bearer) + CSRF 토큰 조합으로 인증
@@ -64,8 +64,8 @@ export function registerCoursesHandlers(): void {
             localStorageKeys: Object.keys(localStorage).join(','),
           };
         })()
-      `)
-      console.log('인증 정보:', JSON.stringify(authInfo, null, 2))
+      `);
+      console.log('인증 정보:', JSON.stringify(authInfo, null, 2));
 
       const modules = await win.webContents.executeJavaScript(`
         (async () => {
@@ -85,21 +85,21 @@ export function registerCoursesHandlers(): void {
           if (!res.ok) throw new Error('HTTP ' + res.status);
           return await res.json();
         })()
-      `)
+      `);
 
       interface VideoItem {
-        title: string
-        contentId: string
-        duration: number
-        fileSize: number
-        thumbnailUrl: string
-        weekPosition: number
+        title: string;
+        contentId: string;
+        duration: number;
+        fileSize: number;
+        thumbnailUrl: string;
+        weekPosition: number;
       }
 
-      const videos: VideoItem[] = []
+      const videos: VideoItem[] = [];
 
       for (const mod of modules) {
-        if (!mod.module_items) continue
+        if (!mod.module_items) continue;
         for (const item of mod.module_items) {
           // 영상 콘텐츠만 필터링 (everlec=에버렉 녹화, movie/video/mp4=일반 영상)
           if (
@@ -107,7 +107,7 @@ export function registerCoursesHandlers(): void {
               item.content_data?.item_content_data?.content_type
             )
           ) {
-            const data = item.content_data.item_content_data
+            const data = item.content_data.item_content_data;
             if (data.content_id) {
               videos.push({
                 title: item.title,
@@ -116,19 +116,19 @@ export function registerCoursesHandlers(): void {
                 fileSize: data.total_file_size || 0,
                 thumbnailUrl: data.thumbnail_url || '',
                 weekPosition: item.content_data.week_position || 0
-              })
+              });
             }
           }
         }
       }
 
-      return { success: true, videos }
+      return { success: true, videos };
     } catch (err) {
-      const msg = (err as Error).message
+      const msg = (err as Error).message;
       if (msg.includes('401') || msg.includes('403')) {
-        return { success: false, error: '로그인이 만료되었습니다. 다시 로그인해주세요.' }
+        return { success: false, error: '로그인이 만료되었습니다. 다시 로그인해주세요.' };
       }
-      return { success: false, error: msg }
+      return { success: false, error: msg };
     }
-  })
+  });
 }

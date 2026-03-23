@@ -1,93 +1,104 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { ArrowLeft, Download, Loader2, PlaySquare, FileText, FolderOpen, X, ChevronDown, CheckSquare, Square } from 'lucide-vue-next'
-import type { VideoItem } from '../../types'
-import type { TranscribeStatus } from '../../composables/useTranscriber'
-import FormatToggle from './FormatToggle.vue'
-import VideoCard from './VideoCard.vue'
+import { ref, computed } from 'vue';
+import {
+  ArrowLeft,
+  Download,
+  Loader2,
+  PlaySquare,
+  FileText,
+  FolderOpen,
+  X,
+  ChevronDown,
+  CheckSquare,
+  Square
+} from 'lucide-vue-next';
+import type { VideoItem } from '../../types';
+import type { TranscribeStatus } from '../../composables/useTranscriber';
+import FormatToggle from './FormatToggle.vue';
+import VideoCard from './VideoCard.vue';
 
 const props = defineProps<{
-  videos: VideoItem[]
-  isLoading: boolean
-  isDownloadingAll: boolean
-  downloadingIds: Set<string>
-  progressMap: Record<string, number>
-  statusMap: Record<string, { status: string; splitCurrent?: number; splitTotal?: number }>
-  formatDuration: (seconds: number) => string
-  formatSize: (bytes: number) => string
-  hasApiKey?: boolean
-  isTranscribingBatch?: boolean
-  transcribeProgressMap?: Record<string, number>
-  transcribeStatusMap?: Record<string, TranscribeStatus>
-  downloadFolder?: string | null
-}>()
+  videos: VideoItem[];
+  isLoading: boolean;
+  isDownloadingAll: boolean;
+  downloadingIds: Set<string>;
+  progressMap: Record<string, number>;
+  statusMap: Record<string, { status: string; splitCurrent?: number; splitTotal?: number }>;
+  formatDuration: (seconds: number) => string;
+  formatSize: (bytes: number) => string;
+  hasApiKey?: boolean;
+  isTranscribingBatch?: boolean;
+  transcribeProgressMap?: Record<string, number>;
+  transcribeStatusMap?: Record<string, TranscribeStatus>;
+  downloadFolder?: string | null;
+}>();
 
-const downloadFormat = defineModel<'mp4' | 'mp3'>('downloadFormat', { required: true })
+const downloadFormat = defineModel<'mp4' | 'mp3'>('downloadFormat', { required: true });
 
 const emit = defineEmits<{
-  back: []
-  downloadAll: []
-  downloadSelected: [videos: VideoItem[]]
-  download: [video: VideoItem]
-  transcribe: [video: VideoItem]
-  transcribeAll: []
-  transcribeSelected: [videos: VideoItem[]]
-  selectFolder: []
-  clearFolder: []
-}>()
+  back: [];
+  downloadAll: [];
+  downloadSelected: [videos: VideoItem[]];
+  download: [video: VideoItem];
+  transcribe: [video: VideoItem];
+  transcribeAll: [];
+  transcribeSelected: [videos: VideoItem[]];
+  selectFolder: [];
+  clearFolder: [];
+}>();
 
 // 선택 상태
-const selectedIds = ref<Set<string>>(new Set())
-const showDropdown = ref(false)
+const selectedIds = ref<Set<string>>(new Set());
+const showDropdown = ref(false);
 
-const selectedCount = computed(() => selectedIds.value.size)
-const isAllSelected = computed(() =>
-  props.videos.length > 0 && selectedIds.value.size === props.videos.length
-)
+const selectedCount = computed(() => selectedIds.value.size);
+const isAllSelected = computed(
+  () => props.videos.length > 0 && selectedIds.value.size === props.videos.length
+);
 const selectedVideos = computed(() =>
   props.videos.filter((v) => selectedIds.value.has(v.contentId))
-)
+);
 
 function toggleSelect(video: VideoItem): void {
-  const ids = new Set(selectedIds.value)
+  const ids = new Set(selectedIds.value);
   if (ids.has(video.contentId)) {
-    ids.delete(video.contentId)
+    ids.delete(video.contentId);
   } else {
-    ids.add(video.contentId)
+    ids.add(video.contentId);
   }
-  selectedIds.value = ids
+  selectedIds.value = ids;
 }
 
 function toggleSelectAll(): void {
   if (isAllSelected.value) {
-    selectedIds.value = new Set()
+    selectedIds.value = new Set();
   } else {
-    selectedIds.value = new Set(props.videos.map((v) => v.contentId))
+    selectedIds.value = new Set(props.videos.map((v) => v.contentId));
   }
 }
 
 function handleAction(action: 'download' | 'transcribe'): void {
-  showDropdown.value = false
-  const targets = selectedCount.value > 0 ? selectedVideos.value : undefined
+  showDropdown.value = false;
+  const targets = selectedCount.value > 0 ? selectedVideos.value : undefined;
   if (action === 'download') {
     if (targets) {
-      emit('downloadSelected', targets)
+      emit('downloadSelected', targets);
     } else {
-      emit('downloadAll')
+      emit('downloadAll');
     }
   } else {
     if (targets) {
-      emit('transcribeSelected', targets)
+      emit('transcribeSelected', targets);
     } else {
-      emit('transcribeAll')
+      emit('transcribeAll');
     }
   }
 }
 
 function closeDropdown(e: MouseEvent): void {
-  const target = e.target as HTMLElement
+  const target = e.target as HTMLElement;
   if (!target.closest('.action-dropdown')) {
-    showDropdown.value = false
+    showDropdown.value = false;
   }
 }
 </script>
@@ -99,8 +110,8 @@ function closeDropdown(e: MouseEvent): void {
       <div class="flex items-center gap-3 -ml-2">
         <button
           class="p-2 rounded-2xl border-none cursor-pointer bg-transparent text-text-2 hover:bg-surface-mute hover:text-text-1 transition-all shrink-0"
-          @click="emit('back')"
           title="목록으로 돌아가기"
+          @click="emit('back')"
         >
           <ArrowLeft :size="24" />
         </button>
@@ -131,11 +142,19 @@ function closeDropdown(e: MouseEvent): void {
             :disabled="isDownloadingAll || isTranscribingBatch || isLoading"
             @click.stop="showDropdown = !showDropdown"
           >
-            <Loader2 v-if="isDownloadingAll || isTranscribingBatch" :size="18" class="animate-spin" />
+            <Loader2
+              v-if="isDownloadingAll || isTranscribingBatch"
+              :size="18"
+              class="animate-spin"
+            />
             <template v-else>
               <Download :size="18" />
               {{ selectedCount > 0 ? `선택 (${selectedCount})` : '전체' }}
-              <ChevronDown :size="14" class="transition-transform" :class="{ 'rotate-180': showDropdown }" />
+              <ChevronDown
+                :size="14"
+                class="transition-transform"
+                :class="{ 'rotate-180': showDropdown }"
+              />
             </template>
           </button>
 
@@ -181,8 +200,8 @@ function closeDropdown(e: MouseEvent): void {
         </span>
         <button
           class="p-1 rounded-lg border-none cursor-pointer bg-transparent text-text-3 hover:bg-surface-mute hover:text-text-1 transition-all shrink-0"
-          @click="emit('clearFolder')"
           title="폴더 선택 해제"
+          @click="emit('clearFolder')"
         >
           <X :size="14" />
         </button>
@@ -193,12 +212,19 @@ function closeDropdown(e: MouseEvent): void {
     </div>
 
     <!-- Empty State -->
-    <div v-if="!isLoading && videos.length === 0" class="flex-1 flex flex-col items-center justify-center text-text-3 py-20">
-      <div class="w-24 h-24 rounded-3xl bg-surface-mute flex items-center justify-center mb-6 shadow-inner">
+    <div
+      v-if="!isLoading && videos.length === 0"
+      class="flex-1 flex flex-col items-center justify-center text-text-3 py-20"
+    >
+      <div
+        class="w-24 h-24 rounded-3xl bg-surface-mute flex items-center justify-center mb-6 shadow-inner"
+      >
         <PlaySquare :size="40" class="text-text-3 opacity-50" />
       </div>
       <p class="text-xl font-bold text-text-2">다운로드할 영상이 없습니다.</p>
-      <p class="text-sm mt-2 font-medium opacity-70">이 과목에 업로드된 영상이 있는지 확인해주세요.</p>
+      <p class="text-sm mt-2 font-medium opacity-70">
+        이 과목에 업로드된 영상이 있는지 확인해주세요.
+      </p>
     </div>
 
     <!-- Video List -->
@@ -214,8 +240,12 @@ function closeDropdown(e: MouseEvent): void {
         :format-size="formatSize"
         :has-api-key="hasApiKey"
         :selected="selectedIds.has(video.contentId)"
-        :transcribe-progress="transcribeProgressMap?.[video.title + '.mp3'] ?? transcribeProgressMap?.[video.title]"
-        :transcribe-status="transcribeStatusMap?.[video.title + '.mp3'] ?? transcribeStatusMap?.[video.title]"
+        :transcribe-progress="
+          transcribeProgressMap?.[video.title + '.mp3'] ?? transcribeProgressMap?.[video.title]
+        "
+        :transcribe-status="
+          transcribeStatusMap?.[video.title + '.mp3'] ?? transcribeStatusMap?.[video.title]
+        "
         @download="emit('download', $event)"
         @transcribe="emit('transcribe', $event)"
         @toggle-select="toggleSelect"
