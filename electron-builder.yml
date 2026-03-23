@@ -12,6 +12,7 @@ files:
 asarUnpack:
   - resources/**
   - node_modules/@ffmpeg-installer/**
+  - node_modules/@ffprobe-installer/**
 win:
   executableName: soongsil-lms-downloader
 nsis:

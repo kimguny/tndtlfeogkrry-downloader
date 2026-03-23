@@ -3,12 +3,15 @@ import { statSync } from 'fs';
 import { unlink } from 'fs/promises';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import ffprobeInstaller from '@ffprobe-installer/ffprobe';
 import { SPLIT_THRESHOLD_BYTES } from '../../shared/config';
 import { IPC_EVENT } from '../../shared/channels';
 
 // asar 패키징 시 경로 보정
 const ffmpegPath = ffmpegInstaller.path.replace('app.asar', 'app.asar.unpacked');
+const ffprobePath = ffprobeInstaller.path.replace('app.asar', 'app.asar.unpacked');
 ffmpeg.setFfmpegPath(ffmpegPath);
+ffmpeg.setFfprobePath(ffprobePath);
 
 /** MP4에서 오디오만 추출하여 MP3로 변환. libmp3lame 코덱, 품질 2 (~190kbps VBR). */
 export function convertToMp3(mp4Path: string, mp3Path: string): Promise<void> {
