@@ -191,6 +191,7 @@ export function registerTranscribeHandlers(): void {
       const results: { fileName: string; success: boolean; error?: string }[] = [];
 
       let nextIndex = 0;
+      let completedCount = 0;
       async function worker(): Promise<void> {
         while (nextIndex < groupEntries.length) {
           const i = nextIndex++;
@@ -236,22 +237,28 @@ export function registerTranscribeHandlers(): void {
               writeFileSync(summarizeTextPath, summarizeTextResult, 'utf-8');
             }
 
+            completedCount++;
             event.sender.send(IPC_EVENT.TRANSCRIBE_PROGRESS, {
               fileName: `${baseName}.mp3`,
               percent: 100,
               status: 'done',
               currentFile: i + 1,
-              totalFiles: total
+              totalFiles: total,
+              batchCompleted: completedCount,
+              batchTotal: total
             });
 
             results.push({ fileName: baseName, success: true });
           } catch (err) {
+            completedCount++;
             event.sender.send(IPC_EVENT.TRANSCRIBE_PROGRESS, {
               fileName: `${baseName}.mp3`,
               percent: 0,
               status: 'error',
               currentFile: i + 1,
-              totalFiles: total
+              totalFiles: total,
+              batchCompleted: completedCount,
+              batchTotal: total
             });
             results.push({ fileName: baseName, success: false, error: (err as Error).message });
           }
@@ -340,6 +347,7 @@ export function registerTranscribeHandlers(): void {
       const transcribeResults: { fileName: string; success: boolean; error?: string }[] = [];
 
       let nextTranscribeIndex = 0;
+      let transcribeCompletedCount = 0;
       async function transcribeWorker(): Promise<void> {
         while (nextTranscribeIndex < groupEntries.length) {
           const i = nextTranscribeIndex++;
@@ -385,22 +393,28 @@ export function registerTranscribeHandlers(): void {
               writeFileSync(summarizeTextPath, summarizeTextResult, 'utf-8');
             }
 
+            transcribeCompletedCount++;
             event.sender.send(IPC_EVENT.TRANSCRIBE_PROGRESS, {
               fileName: `${baseName}.mp3`,
               percent: 100,
               status: 'done',
               currentFile: i + 1,
-              totalFiles: total
+              totalFiles: total,
+              batchCompleted: transcribeCompletedCount,
+              batchTotal: total
             });
 
             transcribeResults.push({ fileName: baseName, success: true });
           } catch (err) {
+            transcribeCompletedCount++;
             event.sender.send(IPC_EVENT.TRANSCRIBE_PROGRESS, {
               fileName: `${baseName}.mp3`,
               percent: 0,
               status: 'error',
               currentFile: i + 1,
-              totalFiles: total
+              totalFiles: total,
+              batchCompleted: transcribeCompletedCount,
+              batchTotal: total
             });
             transcribeResults.push({
               fileName: baseName,

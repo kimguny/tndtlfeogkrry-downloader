@@ -58,4 +58,6 @@ export interface TranscribeProgressData {
   totalParts?: number; // 분할 파일 총 파트 수
   currentFile?: number; // 일괄 변환 시 현재 파일 번호
   totalFiles?: number; // 일괄 변환 시 총 파일 수
+  batchCompleted?: number; // 일괄 변환 완료 개수
+  batchTotal?: number; // 일괄 변환 전체 개수
 }

@@ -90,7 +90,11 @@ export function useTranscriber(): UseTranscriberReturn {
       currentFile: data.currentFile,
       totalFiles: data.totalFiles
     };
-    transcribeMessage.value = statusToMessage(data);
+    if (data.batchCompleted != null && data.batchTotal != null) {
+      transcribeMessage.value = `텍스트 변환 중: ${data.batchCompleted}/${data.batchTotal}개 완료`;
+    } else {
+      transcribeMessage.value = statusToMessage(data);
+    }
   });
 
   onUnmounted(() => {
