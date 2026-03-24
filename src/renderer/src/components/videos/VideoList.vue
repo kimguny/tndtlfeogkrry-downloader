@@ -154,7 +154,12 @@ function closeDropdown(e: MouseEvent): void {
         <!-- 전체/해제 선택 버튼 -->
         <button
           v-if="videos.length > 0"
-          class="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-border text-sm font-bold cursor-pointer whitespace-nowrap bg-surface-mute text-text-2 hover:bg-surface-hover hover:text-text-1 transition-all"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-sm font-bold cursor-pointer whitespace-nowrap transition-all"
+          :class="
+            isAllSelected
+              ? 'bg-primary/10 border-primary/30 text-primary'
+              : 'bg-surface-mute border-border text-text-2 hover:bg-surface-hover hover:text-text-1'
+          "
           @click="toggleSelectAll"
         >
           <CheckSquare v-if="isAllSelected" :size="16" class="text-primary" />
