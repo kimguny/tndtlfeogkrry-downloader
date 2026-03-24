@@ -85,7 +85,13 @@ async function handleTranscribe(video: { contentId: string; title: string }): Pr
   await transcribe(filePath, `${safeName}.mp3`);
 }
 
-async function handleDownloadSelected(selected: VideoItem[]): Promise<void> {
+async function handleDownloadAll(format: 'mp4' | 'mp3'): Promise<void> {
+  downloadFormat.value = format;
+  await downloadAll();
+}
+
+async function handleDownloadSelected(selected: VideoItem[], format: 'mp4' | 'mp3'): Promise<void> {
+  downloadFormat.value = format;
   await downloadAll(selected);
 }
 
@@ -146,7 +152,6 @@ async function handleDeleteApiKey(): Promise<void> {
 
               <VideoList
                 v-else
-                v-model:download-format="downloadFormat"
                 v-model:with-summary="withSummary"
                 :videos="videos"
                 :is-loading="isLoading"
@@ -162,7 +167,7 @@ async function handleDeleteApiKey(): Promise<void> {
                 :transcribe-status-map="transcribeStatusMap"
                 :download-folder="downloadFolder"
                 @back="goBackToCourses"
-                @download-all="downloadAll"
+                @download-all="handleDownloadAll"
                 @download-selected="handleDownloadSelected"
                 @download="download"
                 @transcribe="handleTranscribe"

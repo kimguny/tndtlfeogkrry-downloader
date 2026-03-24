@@ -6,6 +6,8 @@ import {
   Loader2,
   PlaySquare,
   FileText,
+  Film,
+  Music,
   FolderOpen,
   X,
   ChevronDown,
@@ -15,7 +17,6 @@ import {
 } from 'lucide-vue-next';
 import type { VideoItem } from '../../types';
 import type { TranscribeStatus } from '../../composables/useTranscriber';
-import FormatToggle from './FormatToggle.vue';
 import VideoCard from './VideoCard.vue';
 
 const props = defineProps<{
@@ -34,13 +35,12 @@ const props = defineProps<{
   downloadFolder?: string | null;
 }>();
 
-const downloadFormat = defineModel<'mp4' | 'mp3'>('downloadFormat', { required: true });
 const withSummary = defineModel<boolean>('withSummary', { required: true });
 
 const emit = defineEmits<{
   back: [];
-  downloadAll: [];
-  downloadSelected: [videos: VideoItem[]];
+  downloadAll: [format: 'mp4' | 'mp3'];
+  downloadSelected: [videos: VideoItem[], format: 'mp4' | 'mp3'];
   download: [video: VideoItem];
   transcribe: [video: VideoItem];
   transcribeAll: [];
@@ -80,14 +80,15 @@ function toggleSelectAll(): void {
   }
 }
 
-function handleAction(action: 'download' | 'transcribe'): void {
+function handleAction(action: 'download-mp4' | 'download-mp3' | 'transcribe'): void {
   showDropdown.value = false;
   const targets = selectedCount.value > 0 ? selectedVideos.value : undefined;
-  if (action === 'download') {
+  if (action === 'download-mp4' || action === 'download-mp3') {
+    const format = action === 'download-mp4' ? 'mp4' : 'mp3';
     if (targets) {
-      emit('downloadSelected', targets);
+      emit('downloadSelected', targets, format);
     } else {
-      emit('downloadAll');
+      emit('downloadAll', format);
     }
   } else {
     if (targets) {
@@ -125,8 +126,6 @@ function closeDropdown(e: MouseEvent): void {
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
-        <FormatToggle v-model="downloadFormat" />
-
         <!-- 요약본 생성 체크박스 -->
         <button
           v-if="hasApiKey"
@@ -198,10 +197,17 @@ function closeDropdown(e: MouseEvent): void {
             >
               <button
                 class="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-text-1 hover:bg-surface-mute transition-all cursor-pointer border-none bg-transparent text-left"
-                @click="handleAction('download')"
+                @click="handleAction('download-mp4')"
               >
-                <Download :size="16" class="text-primary shrink-0" />
-                {{ selectedCount > 0 ? `${selectedCount}개 다운로드` : '전체 다운로드' }}
+                <Film :size="16" class="text-primary shrink-0" />
+                {{ selectedCount > 0 ? `${selectedCount}개 MP4 다운로드` : '전체 MP4 다운로드' }}
+              </button>
+              <button
+                class="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-text-1 hover:bg-surface-mute transition-all cursor-pointer border-none bg-transparent text-left border-t border-border/50"
+                @click="handleAction('download-mp3')"
+              >
+                <Music :size="16" class="text-primary shrink-0" />
+                {{ selectedCount > 0 ? `${selectedCount}개 MP3 다운로드` : '전체 MP3 다운로드' }}
               </button>
               <button
                 v-if="hasApiKey"
