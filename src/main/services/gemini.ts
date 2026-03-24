@@ -2,10 +2,12 @@ import { join } from 'path';
 import { app, safeStorage } from 'electron';
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { GEMINI_MODEL, GEMINI_MAX_RETRIES } from '../../shared/config';
+import { DEFAULT_GEMINI_MODEL, GEMINI_MAX_RETRIES, isGeminiModel } from '../../shared/config';
+import type { GeminiModelId } from '../../shared/types';
 
 // OS 수준 암호화(safeStorage)로 API 키를 보호. 파일에는 바이너리 암호문만 저장됨.
 const API_KEY_FILE = join(app.getPath('userData'), 'gemini-key.enc');
+const MODEL_FILE = join(app.getPath('userData'), 'gemini-model.json');
 
 export function saveGeminiApiKey(key: string): void {
   const encrypted = safeStorage.encryptString(key);
@@ -29,12 +31,32 @@ export function deleteGeminiApiKey(): void {
   }
 }
 
-export async function transcribeOne(mp3Path: string, apiKey: string): Promise<string> {
+export function saveGeminiModel(model: GeminiModelId): void {
+  writeFileSync(MODEL_FILE, JSON.stringify({ model }), 'utf-8');
+}
+
+export function loadGeminiModel(): GeminiModelId {
+  if (!existsSync(MODEL_FILE)) return DEFAULT_GEMINI_MODEL;
+
+  try {
+    const raw = readFileSync(MODEL_FILE, 'utf-8');
+    const parsed = JSON.parse(raw) as { model?: string };
+    return parsed.model && isGeminiModel(parsed.model) ? parsed.model : DEFAULT_GEMINI_MODEL;
+  } catch {
+    return DEFAULT_GEMINI_MODEL;
+  }
+}
+
+export async function transcribeOne(
+  mp3Path: string,
+  apiKey: string,
+  modelName: GeminiModelId
+): Promise<string> {
   const audioData = readFileSync(mp3Path);
   const base64Audio = audioData.toString('base64');
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+  const model = genAI.getGenerativeModel({ model: modelName });
 
   const result = await model.generateContent([
     {
@@ -51,9 +73,13 @@ export async function transcribeOne(mp3Path: string, apiKey: string): Promise<st
   return result.response.text();
 }
 
-async function summarizeText(text: string, apiKey: string): Promise<string> {
+async function summarizeText(
+  text: string,
+  apiKey: string,
+  modelName: GeminiModelId
+): Promise<string> {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+  const model = genAI.getGenerativeModel({ model: modelName });
 
   const prompt = `아래 강의 원문을 시험 대비용으로 요약하세요.
 요구사항:
@@ -95,7 +121,10 @@ function isQuotaExhausted(message: string): boolean {
 }
 
 /** 429 Rate Limit 시 지수 백오프로 재시도. 할당량 소진은 즉시 실패. */
-async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = GEMINI_MAX_RETRIES): Promise<T> {
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = GEMINI_MAX_RETRIES
+): Promise<T> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await fn();
@@ -124,17 +153,19 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = GEMINI_MA
 export function transcribeWithRetry(
   mp3Path: string,
   apiKey: string,
+  model: GeminiModelId,
   maxRetries: number = GEMINI_MAX_RETRIES
 ): Promise<string> {
-  return withRetry(() => transcribeOne(mp3Path, apiKey), maxRetries);
+  return withRetry(() => transcribeOne(mp3Path, apiKey, model), maxRetries);
 }
 
 export function summarizeWithRetry(
   text: string,
   apiKey: string,
+  model: GeminiModelId,
   maxRetries: number = GEMINI_MAX_RETRIES
 ): Promise<string> {
-  return withRetry(() => summarizeText(text, apiKey), maxRetries);
+  return withRetry(() => summarizeText(text, apiKey, model), maxRetries);
 }
 
 /**

@@ -5,6 +5,19 @@ export interface CourseItem {
   term: string; // 학기 (예: "2026-1학기")
 }
 
+export type GeminiModelId =
+  | 'gemini-3.1-pro'
+  | 'gemini-3-flash'
+  | 'gemini-3.1-flash-lite'
+  | 'gemini-2.5-flash'
+  | 'gemini-2.5-flash-lite';
+
+export interface GeminiModelOption {
+  id: GeminiModelId;
+  label: string;
+  description: string;
+}
+
 /** Canvas LMS 영상 콘텐츠 메타데이터 */
 export interface VideoItem {
   title: string;

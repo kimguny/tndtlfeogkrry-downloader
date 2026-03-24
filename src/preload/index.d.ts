@@ -4,7 +4,8 @@ import type {
   VideoItem,
   VideoRef,
   DownloadProgressData,
-  TranscribeProgressData
+  TranscribeProgressData,
+  GeminiModelId
 } from '../shared/types';
 
 interface DownloadApi {
@@ -49,6 +50,8 @@ interface DownloadApi {
   setGeminiApiKey: (key: string) => Promise<{ success: boolean; error?: string }>;
   getGeminiApiKey: () => Promise<{ hasKey: boolean }>;
   deleteGeminiApiKey: () => Promise<{ success: boolean }>;
+  getGeminiModel: () => Promise<{ model: GeminiModelId }>;
+  setGeminiModel: (model: GeminiModelId) => Promise<{ success: boolean; error?: string }>;
   transcribeAudio: (
     filePath: string,
     withSummary?: boolean

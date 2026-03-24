@@ -140,9 +140,7 @@ function closeDropdown(e: MouseEvent): void {
           <div
             class="w-4 h-4 rounded border flex items-center justify-center transition-all duration-200"
             :class="
-              withSummary
-                ? 'bg-purple-500 border-purple-500'
-                : 'bg-transparent border-text-3'
+              withSummary ? 'bg-purple-500 border-purple-500' : 'bg-transparent border-text-3'
             "
           >
             <Check v-if="withSummary" :size="12" class="text-white" />

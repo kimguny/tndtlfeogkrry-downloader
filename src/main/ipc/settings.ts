@@ -1,6 +1,14 @@
 import { BrowserWindow, ipcMain, dialog, shell } from 'electron';
 import { IPC } from '../../shared/channels';
-import { saveGeminiApiKey, loadGeminiApiKey, deleteGeminiApiKey } from '../services/gemini';
+import { isGeminiModel } from '../../shared/config';
+import {
+  saveGeminiApiKey,
+  loadGeminiApiKey,
+  deleteGeminiApiKey,
+  saveGeminiModel,
+  loadGeminiModel
+} from '../services/gemini';
+import type { GeminiModelId } from '../../shared/types';
 
 export function registerSettingsHandlers(): void {
   ipcMain.handle(IPC.SET_GEMINI_API_KEY, async (_event, key: string) => {
@@ -19,6 +27,23 @@ export function registerSettingsHandlers(): void {
   ipcMain.handle(IPC.DELETE_GEMINI_API_KEY, async () => {
     deleteGeminiApiKey();
     return { success: true };
+  });
+
+  ipcMain.handle(IPC.GET_GEMINI_MODEL, async () => {
+    return { model: loadGeminiModel() };
+  });
+
+  ipcMain.handle(IPC.SET_GEMINI_MODEL, async (_event, model: GeminiModelId) => {
+    if (!isGeminiModel(model)) {
+      return { success: false, error: '지원하지 않는 Gemini 모델입니다.' };
+    }
+
+    try {
+      saveGeminiModel(model);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
   });
 
   ipcMain.handle(IPC.OPEN_FILE, async (_event, filePath: string) => {

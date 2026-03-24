@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { Sun, Moon, Book, LogIn, Key, ArrowUpCircle } from 'lucide-vue-next';
+import { Sun, Moon, Book, LogIn, Key, ArrowUpCircle, Settings } from 'lucide-vue-next';
 import { useTheme } from '../../composables/useTheme';
 
 defineProps<{
@@ -72,11 +72,11 @@ function openDownload(): void {
 
       <button
         class="w-full flex items-center justify-center md:justify-start gap-0 md:gap-3.5 px-0 md:px-4 py-3 rounded-xl text-sm font-medium text-text-2 hover:bg-surface-mute hover:text-text-1 transition-all group/btn"
-        title="Gemini API 설정"
+        title="설정"
         @click="emit('openSettings')"
       >
-        <Key :size="20" :class="hasApiKey ? 'text-purple-500' : ''" class="shrink-0" />
-        <span class="hidden md:block flex-1 text-left whitespace-nowrap">Gemini API 설정</span>
+        <Settings :size="20" :class="hasApiKey ? 'text-purple-500' : ''" class="shrink-0" />
+        <span class="hidden md:block flex-1 text-left whitespace-nowrap">설정</span>
         <span v-if="hasApiKey" class="hidden md:block w-2 h-2 rounded-full bg-success"></span>
       </button>
     </nav>

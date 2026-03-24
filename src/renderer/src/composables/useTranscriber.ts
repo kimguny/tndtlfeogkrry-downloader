@@ -1,4 +1,6 @@
 import { ref, onUnmounted, type Ref } from 'vue';
+import { DEFAULT_GEMINI_MODEL } from '../../../shared/config';
+import type { GeminiModelId } from '../../../shared/types';
 
 export interface TranscribeStatus {
   status: 'transcribing' | 'merging' | 'done' | 'error';
@@ -9,6 +11,7 @@ export interface TranscribeStatus {
 }
 
 const hasApiKey = ref(false);
+const selectedGeminiModel = ref<GeminiModelId>(DEFAULT_GEMINI_MODEL);
 const withSummary = ref(true);
 const isTranscribing = ref(false);
 const isTranscribingBatch = ref(false);
@@ -18,6 +21,7 @@ const transcribeMessage = ref('');
 
 interface UseTranscriberReturn {
   hasApiKey: Ref<boolean>;
+  selectedGeminiModel: Ref<GeminiModelId>;
   withSummary: Ref<boolean>;
   isTranscribing: Ref<boolean>;
   isTranscribingBatch: Ref<boolean>;
@@ -27,6 +31,8 @@ interface UseTranscriberReturn {
   checkApiKey: () => Promise<void>;
   saveApiKey: (key: string) => Promise<boolean>;
   deleteApiKey: () => Promise<void>;
+  loadGeminiModel: () => Promise<void>;
+  saveGeminiModel: (model: GeminiModelId) => Promise<boolean>;
   transcribe: (filePath: string, fileName: string) => Promise<void>;
   transcribeBatch: (dirPath: string) => Promise<void>;
   downloadAndTranscribeAll: (
@@ -69,6 +75,23 @@ export function useTranscriber(): UseTranscriberReturn {
   async function deleteApiKey(): Promise<void> {
     await window.api.deleteGeminiApiKey();
     hasApiKey.value = false;
+  }
+
+  async function loadGeminiModel(): Promise<void> {
+    const result = await window.api.getGeminiModel();
+    selectedGeminiModel.value = result.model;
+  }
+
+  async function saveGeminiModel(model: GeminiModelId): Promise<boolean> {
+    const result = await window.api.setGeminiModel(model);
+    if (result.success) {
+      selectedGeminiModel.value = model;
+      transcribeMessage.value = `Gemini 모델 변경: ${model}`;
+      return true;
+    }
+
+    transcribeMessage.value = result.error || 'Gemini 모델 저장 실패';
+    return false;
   }
 
   async function transcribe(filePath: string, fileName: string): Promise<void> {
@@ -133,6 +156,7 @@ export function useTranscriber(): UseTranscriberReturn {
 
   return {
     hasApiKey,
+    selectedGeminiModel,
     withSummary,
     isTranscribing,
     isTranscribingBatch,
@@ -142,6 +166,8 @@ export function useTranscriber(): UseTranscriberReturn {
     checkApiKey,
     saveApiKey,
     deleteApiKey,
+    loadGeminiModel,
+    saveGeminiModel,
     transcribe,
     transcribeBatch,
     downloadAndTranscribeAll,

@@ -1,3 +1,5 @@
+import type { GeminiModelId, GeminiModelOption } from './types';
+
 /** Electron session partition for LMS login */
 export const LMS_SESSION_PARTITION = 'persist:lms';
 
@@ -10,8 +12,35 @@ export const MAX_CONCURRENT_DOWNLOADS = 3;
 /** 동시 텍스트 변환 최대 개수 */
 export const MAX_CONCURRENT_TRANSCRIPTIONS = 2;
 
-/** Gemini 모델명 */
-export const GEMINI_MODEL = 'gemini-2.0-flash';
+export const DEFAULT_GEMINI_MODEL: GeminiModelId = 'gemini-2.5-flash';
+
+export const GEMINI_MODEL_OPTIONS: GeminiModelOption[] = [
+  {
+    id: 'gemini-3.1-pro',
+    label: 'Gemini 3.1 Pro',
+    description: '고급 지능, 복잡한 문제 해결, 강력한 에이전트 및 분위기 코딩 기능'
+  },
+  {
+    id: 'gemini-3-flash',
+    label: 'Gemini 3 Flash',
+    description: '더 큰 모델에 필적하는 프런티어급 성능을 훨씬 저렴한 비용으로 제공'
+  },
+  {
+    id: 'gemini-3.1-flash-lite',
+    label: 'Gemini 3.1 Flash-Lite',
+    description: '프런티어급 성능을 더 낮은 비용으로 제공하는 빠른 경량 모델'
+  },
+  {
+    id: 'gemini-2.5-flash',
+    label: 'Gemini 2.5 Flash',
+    description: '짧은 지연 시간과 대용량 작업에 적합한 최고 가성비 모델'
+  },
+  {
+    id: 'gemini-2.5-flash-lite',
+    label: 'Gemini 2.5 Flash-Lite',
+    description: '2.5 계열에서 가장 빠르고 예산 친화적인 멀티모달 모델'
+  }
+];
 
 /** Gemini API 재시도 최대 횟수 */
 export const GEMINI_MAX_RETRIES = 3;
@@ -55,3 +84,7 @@ function nfdByteLength(str: string): number {
 
 /** GitHub 리포지토리 (업데이트 확인용) */
 export const GITHUB_REPO = 'daunload/tndtlfeogkrry-downloader';
+
+export function isGeminiModel(model: string): model is GeminiModelId {
+  return GEMINI_MODEL_OPTIONS.some((option) => option.id === model);
+}

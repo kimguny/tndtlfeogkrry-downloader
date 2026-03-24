@@ -8,6 +8,8 @@ export const IPC = {
   SET_GEMINI_API_KEY: 'set-gemini-api-key',
   GET_GEMINI_API_KEY: 'get-gemini-api-key',
   DELETE_GEMINI_API_KEY: 'delete-gemini-api-key',
+  SET_GEMINI_MODEL: 'set-gemini-model',
+  GET_GEMINI_MODEL: 'get-gemini-model',
   TRANSCRIBE_AUDIO: 'transcribe-audio',
   TRANSCRIBE_BATCH: 'transcribe-batch',
   DOWNLOAD_AND_TRANSCRIBE_ALL: 'download-and-transcribe-all',

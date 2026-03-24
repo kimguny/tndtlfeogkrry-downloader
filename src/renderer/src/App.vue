@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
-import { toSafeFileName } from '../../shared/config';
+import { GEMINI_MODEL_OPTIONS, toSafeFileName } from '../../shared/config';
+import type { GeminiModelId } from '../../shared/types';
 import type { VideoItem } from './types';
 import { useDownloader } from './composables/useDownloader';
 import { useTranscriber } from './composables/useTranscriber';
@@ -39,6 +40,7 @@ const {
 
 const {
   hasApiKey,
+  selectedGeminiModel,
   withSummary,
   isTranscribingBatch,
   transcribeProgressMap,
@@ -47,6 +49,8 @@ const {
   checkApiKey,
   saveApiKey,
   deleteApiKey,
+  loadGeminiModel,
+  saveGeminiModel,
   transcribe,
   downloadAndTranscribeAll
 } = useTranscriber();
@@ -55,12 +59,18 @@ const showSettings = ref(false);
 
 onMounted(() => {
   checkApiKey();
+  loadGeminiModel();
 });
 
 // transcribeMessage가 있으면 message에 반영
 watch(transcribeMessage, (val) => {
   if (val) message.value = val;
 });
+
+async function openSettings(): Promise<void> {
+  await loadGeminiModel();
+  showSettings.value = true;
+}
 
 async function handleTranscribe(video: { contentId: string; title: string }): Promise<void> {
   const savedPath = downloadedPaths.value[video.contentId];
@@ -119,6 +129,10 @@ async function handleSaveApiKey(key: string): Promise<void> {
 async function handleDeleteApiKey(): Promise<void> {
   await deleteApiKey();
 }
+
+async function handleSaveGeminiModel(model: GeminiModelId): Promise<void> {
+  await saveGeminiModel(model);
+}
 </script>
 
 <template>
@@ -129,7 +143,7 @@ async function handleDeleteApiKey(): Promise<void> {
       :is-logged-in="isLoggedIn"
       :has-api-key="hasApiKey"
       @login="login"
-      @open-settings="showSettings = true"
+      @open-settings="openSettings"
     />
 
     <main class="flex-1 flex flex-col h-full overflow-hidden relative">
@@ -191,7 +205,10 @@ async function handleDeleteApiKey(): Promise<void> {
     <ApiKeySettings
       v-if="showSettings"
       :has-api-key="hasApiKey"
+      :selected-model="selectedGeminiModel"
+      :model-options="GEMINI_MODEL_OPTIONS"
       @save="handleSaveApiKey"
+      @save-model="handleSaveGeminiModel"
       @delete="handleDeleteApiKey"
       @close="showSettings = false"
     />

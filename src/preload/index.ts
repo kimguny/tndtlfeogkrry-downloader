@@ -6,7 +6,8 @@ import type {
   VideoItem,
   VideoRef,
   DownloadProgressData,
-  TranscribeProgressData
+  TranscribeProgressData,
+  GeminiModelId
 } from '../shared/types';
 
 const api = {
@@ -69,6 +70,11 @@ const api = {
   deleteGeminiApiKey: (): Promise<{ success: boolean }> =>
     ipcRenderer.invoke(IPC.DELETE_GEMINI_API_KEY),
 
+  getGeminiModel: (): Promise<{ model: GeminiModelId }> => ipcRenderer.invoke(IPC.GET_GEMINI_MODEL),
+
+  setGeminiModel: (model: GeminiModelId): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC.SET_GEMINI_MODEL, model),
+
   transcribeAudio: (
     filePath: string,
     withSummary?: boolean
@@ -105,7 +111,8 @@ const api = {
     downloadSuccessCount?: number;
     transcribeSuccessCount?: number;
     total?: number;
-  }> => ipcRenderer.invoke(IPC.DOWNLOAD_AND_TRANSCRIBE_ALL, videos, folderPath, withSummary ?? true),
+  }> =>
+    ipcRenderer.invoke(IPC.DOWNLOAD_AND_TRANSCRIBE_ALL, videos, folderPath, withSummary ?? true),
 
   onTranscribeProgress: (callback: (data: TranscribeProgressData) => void): void => {
     ipcRenderer.on(IPC_EVENT.TRANSCRIBE_PROGRESS, (_event, data) => callback(data));
