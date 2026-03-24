@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import { electronApp, optimizer } from '@electron-toolkit/utils';
 import { createWindow, destroyLmsWin } from './window';
 import { registerAllIpcHandlers } from './ipc';
+import { initAutoUpdater } from './ipc/update';
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron');
@@ -12,6 +13,7 @@ app.whenReady().then(() => {
 
   registerAllIpcHandlers();
   createWindow();
+  initAutoUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
