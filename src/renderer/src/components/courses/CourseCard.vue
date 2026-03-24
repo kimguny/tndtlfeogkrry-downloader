@@ -16,9 +16,7 @@ const emit = defineEmits<{
     class="group flex items-center gap-3 px-4 py-3 border border-border/60 rounded-xl bg-surface cursor-pointer transition-all hover:border-primary/50 hover:bg-primary/5"
     @click="emit('select', course)"
   >
-    <span
-      class="shrink-0 px-2 py-0.5 rounded-md bg-primary/10 text-primary text-[11px] font-bold"
-    >
+    <span class="shrink-0 px-2 py-0.5 rounded-md bg-primary/10 text-primary text-[11px] font-bold">
       {{ course.term }}
     </span>
     <span

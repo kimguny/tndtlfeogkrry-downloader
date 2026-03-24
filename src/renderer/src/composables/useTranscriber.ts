@@ -54,13 +54,9 @@ function statusToMessage(data: {
 }): string {
   const name = data.fileName.replace(/\.[^.]+$/, '');
   const fileInfo =
-    data.totalFiles && data.totalFiles > 1
-      ? ` [${data.currentFile}/${data.totalFiles}]`
-      : '';
+    data.totalFiles && data.totalFiles > 1 ? ` [${data.currentFile}/${data.totalFiles}]` : '';
   const partInfo =
-    data.totalParts && data.totalParts > 1
-      ? ` (파트 ${data.currentPart}/${data.totalParts})`
-      : '';
+    data.totalParts && data.totalParts > 1 ? ` (파트 ${data.currentPart}/${data.totalParts})` : '';
 
   switch (data.status) {
     case 'converting':

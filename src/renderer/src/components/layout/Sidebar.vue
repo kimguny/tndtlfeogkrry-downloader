@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { Sun, Moon, Book, LogIn, Key, ArrowUpCircle, Settings } from 'lucide-vue-next';
+import { Sun, Moon, Book, LogIn, ArrowUpCircle, Settings } from 'lucide-vue-next';
 import { useTheme } from '../../composables/useTheme';
 
 defineProps<{

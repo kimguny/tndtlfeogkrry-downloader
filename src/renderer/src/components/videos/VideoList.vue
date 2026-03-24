@@ -163,9 +163,7 @@ function closeDropdown(e: MouseEvent): void {
         >
           <div
             class="w-4 h-4 rounded border flex items-center justify-center transition-all duration-200"
-            :class="
-              useFileApi ? 'bg-blue-500 border-blue-500' : 'bg-transparent border-text-3'
-            "
+            :class="useFileApi ? 'bg-blue-500 border-blue-500' : 'bg-transparent border-text-3'"
           >
             <Check v-if="useFileApi" :size="12" class="text-white" />
           </div>

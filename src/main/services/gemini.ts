@@ -92,7 +92,9 @@ export async function transcribeOne(
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: modelName });
 
-  let audioPart: { inlineData: { mimeType: string; data: string } } | { fileData: { fileUri: string; mimeType: string } };
+  let audioPart:
+    | { inlineData: { mimeType: string; data: string } }
+    | { fileData: { fileUri: string; mimeType: string } };
   let uploadedFileName: string | null = null;
 
   if (useFileApi) {

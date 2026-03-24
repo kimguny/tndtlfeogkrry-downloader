@@ -17,16 +17,10 @@ const emit = defineEmits<{
 
 <template>
   <div class="h-full flex flex-col">
-    <div
-      class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4"
-    >
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 gap-4">
       <div>
-        <h2 class="text-xl sm:text-2xl font-bold text-text-1 tracking-tight">
-          내 강의 목록
-        </h2>
-        <p class="text-sm text-text-3 mt-1 font-medium">
-          다운로드할 과목을 선택하세요.
-        </p>
+        <h2 class="text-xl sm:text-2xl font-bold text-text-1 tracking-tight">내 강의 목록</h2>
+        <p class="text-sm text-text-3 mt-1 font-medium">다운로드할 과목을 선택하세요.</p>
       </div>
 
       <div class="flex items-center gap-3 w-full sm:w-auto">

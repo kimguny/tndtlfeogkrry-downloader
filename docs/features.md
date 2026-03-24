@@ -85,12 +85,13 @@
 
 UI에서 **File API** 체크박스로 두 가지 전송 방식을 선택할 수 있다:
 
-| 방식 | 설명 | 장점 |
-|---|---|---|
-| **inlineData** (기본) | MP3를 base64 인코딩하여 요청 본문에 포함 | 추가 네트워크 호출 없음 |
-| **File API** | `GoogleAIFileManager`로 파일 업로드 후 URI 참조 | 토큰 절약, 2GB까지 지원 |
+| 방식                  | 설명                                            | 장점                    |
+| --------------------- | ----------------------------------------------- | ----------------------- |
+| **inlineData** (기본) | MP3를 base64 인코딩하여 요청 본문에 포함        | 추가 네트워크 호출 없음 |
+| **File API**          | `GoogleAIFileManager`로 파일 업로드 후 URI 참조 | 토큰 절약, 2GB까지 지원 |
 
 File API 사용 시:
+
 - `uploadAndWaitForActive()`로 파일 업로드 → ACTIVE 상태 대기
 - `fileData: { fileUri, mimeType }`로 API 요청
 - 변환 완료 후 `deleteUploadedFile()`로 업로드된 파일 자동 정리 (실패 시 48시간 후 자동 만료)
@@ -130,7 +131,7 @@ File API 사용 시:
 | **포맷 선택**   | 드롭다운으로 MP4/MP3/텍스트 변환 선택                                                    |
 | **File API**    | 체크박스로 Gemini File API 전송 방식 토글                                                |
 | **진행률**      | 원형 프로그레스바 + 퍼센트 표시 (`ProgressBar.vue`)                                      |
-| **상태 메시지** | 하단 중앙 플로팅 토스트 — 변환 단계별 실시간 표시 (`StatusMessage.vue`)                   |
+| **상태 메시지** | 하단 중앙 플로팅 토스트 — 변환 단계별 실시간 표시 (`StatusMessage.vue`)                  |
 | **영상 카드**   | 썸네일(호버 확대), 메타데이터, 다운로드/변환 버튼, 상태 배지                             |
 
 ## 8. 자동 업데이트
