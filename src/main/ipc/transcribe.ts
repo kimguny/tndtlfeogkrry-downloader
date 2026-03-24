@@ -18,7 +18,7 @@ import { convertToMp3, splitMp3 } from '../services/media';
 export function registerTranscribeHandlers(): void {
   ipcMain.handle(
     IPC.TRANSCRIBE_AUDIO,
-    async (event, filePath: string, withSummary: boolean = true) => {
+    async (event, filePath: string, withSummary: boolean = true, useFileApi: boolean = false) => {
       const apiKey = loadGeminiApiKey();
       const geminiModel = loadGeminiModel();
       if (!apiKey) {
@@ -75,15 +75,30 @@ export function registerTranscribeHandlers(): void {
         const texts: string[] = [];
 
         for (let i = 0; i < filesToTranscribe.length; i++) {
+          if (useFileApi) {
+            event.sender.send(IPC_EVENT.TRANSCRIBE_PROGRESS, {
+              fileName: basename(filePath),
+              percent: Math.round((i / totalParts) * 45),
+              status: 'uploading',
+              currentPart: i + 1,
+              totalParts
+            });
+          }
+
           event.sender.send(IPC_EVENT.TRANSCRIBE_PROGRESS, {
             fileName: basename(filePath),
-            percent: Math.round((i / totalParts) * 90),
+            percent: Math.round(((useFileApi ? i + 0.5 : i) / totalParts) * 90),
             status: 'transcribing',
             currentPart: i + 1,
             totalParts
           });
 
-          const text = await transcribeWithRetry(filesToTranscribe[i], apiKey, geminiModel);
+          const text = await transcribeWithRetry(
+            filesToTranscribe[i],
+            apiKey,
+            geminiModel,
+            useFileApi
+          );
           texts.push(text);
         }
 
@@ -148,7 +163,7 @@ export function registerTranscribeHandlers(): void {
 
   ipcMain.handle(
     IPC.TRANSCRIBE_BATCH,
-    async (event, dirPath: string, withSummary: boolean = true) => {
+    async (event, dirPath: string, withSummary: boolean = true, useFileApi: boolean = false) => {
       const apiKey = loadGeminiApiKey();
       const geminiModel = loadGeminiModel();
       if (!apiKey) {
@@ -170,9 +185,21 @@ export function registerTranscribeHandlers(): void {
 
           try {
             for (let j = 0; j < files.length; j++) {
+              if (useFileApi) {
+                event.sender.send(IPC_EVENT.TRANSCRIBE_PROGRESS, {
+                  fileName: `${baseName}.mp3`,
+                  percent: Math.round((j / files.length) * 45),
+                  status: 'uploading',
+                  currentPart: j + 1,
+                  totalParts: files.length,
+                  currentFile: i + 1,
+                  totalFiles: total
+                });
+              }
+
               event.sender.send(IPC_EVENT.TRANSCRIBE_PROGRESS, {
                 fileName: `${baseName}.mp3`,
-                percent: Math.round((j / files.length) * 90),
+                percent: Math.round(((useFileApi ? j + 0.5 : j) / files.length) * 90),
                 status: 'transcribing',
                 currentPart: j + 1,
                 totalParts: files.length,
@@ -180,7 +207,7 @@ export function registerTranscribeHandlers(): void {
                 totalFiles: total
               });
 
-              const text = await transcribeWithRetry(files[j], key, geminiModel);
+              const text = await transcribeWithRetry(files[j], key, geminiModel, useFileApi);
               texts.push(text);
             }
 
@@ -234,7 +261,8 @@ export function registerTranscribeHandlers(): void {
       event,
       videos: { contentId: string; title: string }[],
       folderPath?: string,
-      withSummary: boolean = true
+      withSummary: boolean = true,
+      useFileApi: boolean = false
     ) => {
       const apiKey = loadGeminiApiKey();
       const geminiModel = loadGeminiModel();
@@ -306,9 +334,21 @@ export function registerTranscribeHandlers(): void {
 
           try {
             for (let j = 0; j < files.length; j++) {
+              if (useFileApi) {
+                event.sender.send(IPC_EVENT.TRANSCRIBE_PROGRESS, {
+                  fileName: `${baseName}.mp3`,
+                  percent: Math.round((j / files.length) * 45),
+                  status: 'uploading',
+                  currentPart: j + 1,
+                  totalParts: files.length,
+                  currentFile: i + 1,
+                  totalFiles: total
+                });
+              }
+
               event.sender.send(IPC_EVENT.TRANSCRIBE_PROGRESS, {
                 fileName: `${baseName}.mp3`,
-                percent: Math.round((j / files.length) * 90),
+                percent: Math.round(((useFileApi ? j + 0.5 : j) / files.length) * 90),
                 status: 'transcribing',
                 currentPart: j + 1,
                 totalParts: files.length,
@@ -316,7 +356,7 @@ export function registerTranscribeHandlers(): void {
                 totalFiles: total
               });
 
-              const text = await transcribeWithRetry(files[j], key, geminiModel);
+              const text = await transcribeWithRetry(files[j], key, geminiModel, useFileApi);
               texts.push(text);
             }
 

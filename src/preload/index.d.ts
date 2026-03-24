@@ -54,11 +54,13 @@ interface DownloadApi {
   setGeminiModel: (model: GeminiModelId) => Promise<{ success: boolean; error?: string }>;
   transcribeAudio: (
     filePath: string,
-    withSummary?: boolean
+    withSummary?: boolean,
+    useFileApi?: boolean
   ) => Promise<{ success: boolean; text?: string; txtPath?: string; error?: string }>;
   transcribeBatch: (
     dirPath: string,
-    withSummary?: boolean
+    withSummary?: boolean,
+    useFileApi?: boolean
   ) => Promise<{
     success: boolean;
     error?: string;
@@ -72,7 +74,8 @@ interface DownloadApi {
   downloadAndTranscribeAll: (
     videos: VideoRef[],
     folderPath?: string,
-    withSummary?: boolean
+    withSummary?: boolean,
+    useFileApi?: boolean
   ) => Promise<{
     success: boolean;
     error?: string;

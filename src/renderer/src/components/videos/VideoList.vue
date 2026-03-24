@@ -13,7 +13,8 @@ import {
   ChevronDown,
   CheckSquare,
   Square,
-  Check
+  Check,
+  Cloud
 } from 'lucide-vue-next';
 import type { VideoItem } from '../../types';
 import type { TranscribeStatus } from '../../composables/useTranscriber';
@@ -36,6 +37,7 @@ const props = defineProps<{
 }>();
 
 const withSummary = defineModel<boolean>('withSummary', { required: true });
+const useFileApi = defineModel<boolean>('useFileApi', { required: true });
 
 const emit = defineEmits<{
   back: [];
@@ -146,6 +148,29 @@ function closeDropdown(e: MouseEvent): void {
             <Check v-if="withSummary" :size="12" class="text-white" />
           </div>
           요약본 생성
+        </button>
+
+        <!-- File API 사용 체크박스 -->
+        <button
+          v-if="hasApiKey"
+          class="flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium cursor-pointer transition-all duration-200"
+          :class="
+            useFileApi
+              ? 'bg-blue-500/10 border-blue-500/30 text-blue-500'
+              : 'bg-surface-mute border-border/50 text-text-3 hover:text-text-2'
+          "
+          @click="useFileApi = !useFileApi"
+        >
+          <div
+            class="w-4 h-4 rounded border flex items-center justify-center transition-all duration-200"
+            :class="
+              useFileApi ? 'bg-blue-500 border-blue-500' : 'bg-transparent border-text-3'
+            "
+          >
+            <Check v-if="useFileApi" :size="12" class="text-white" />
+          </div>
+          <Cloud :size="14" />
+          File API
         </button>
 
         <!-- 전체/해제 선택 버튼 -->

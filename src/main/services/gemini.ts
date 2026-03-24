@@ -1,7 +1,8 @@
-import { join } from 'path';
+import { basename, join } from 'path';
 import { app, safeStorage } from 'electron';
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleAIFileManager, FileState } from '@google/generative-ai/server';
 import { DEFAULT_GEMINI_MODEL, GEMINI_MAX_RETRIES, isGeminiModel } from '../../shared/config';
 import type { GeminiModelId } from '../../shared/types';
 
@@ -47,30 +48,76 @@ export function loadGeminiModel(): GeminiModelId {
   }
 }
 
+/** File API로 파일을 업로드하고 ACTIVE 상태가 될 때까지 대기한다. */
+async function uploadAndWaitForActive(
+  mp3Path: string,
+  apiKey: string
+): Promise<{ fileUri: string; mimeType: string; fileName: string }> {
+  const fileManager = new GoogleAIFileManager(apiKey);
+
+  const uploadResult = await fileManager.uploadFile(mp3Path, {
+    mimeType: 'audio/mp3',
+    displayName: basename(mp3Path)
+  });
+
+  let file = uploadResult.file;
+  while (file.state === FileState.PROCESSING) {
+    await new Promise((r) => setTimeout(r, 2000));
+    file = await fileManager.getFile(file.name);
+  }
+
+  if (file.state === FileState.FAILED) {
+    throw new Error('Gemini File API: 파일 처리에 실패했습니다.');
+  }
+
+  return { fileUri: file.uri, mimeType: file.mimeType, fileName: file.name };
+}
+
+/** 업로드된 File API 파일을 삭제한다. 실패해도 무시 (48시간 후 자동 삭제됨). */
+async function deleteUploadedFile(fileName: string, apiKey: string): Promise<void> {
+  try {
+    const fileManager = new GoogleAIFileManager(apiKey);
+    await fileManager.deleteFile(fileName);
+  } catch {
+    // 삭제 실패는 무시 — 48시간 후 자동 만료됨
+  }
+}
+
 export async function transcribeOne(
   mp3Path: string,
   apiKey: string,
-  modelName: GeminiModelId
+  modelName: GeminiModelId,
+  useFileApi: boolean = false
 ): Promise<string> {
-  const audioData = readFileSync(mp3Path);
-  const base64Audio = audioData.toString('base64');
-
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: modelName });
 
-  const result = await model.generateContent([
-    {
-      inlineData: {
-        mimeType: 'audio/mp3',
-        data: base64Audio
-      }
-    },
-    {
-      text: '이 오디오의 내용을 한국어 텍스트로 정확하게 받아적어주세요. 강의 내용이므로 전문 용어를 정확히 표기하고, 문단을 적절히 나눠주세요.'
-    }
-  ]);
+  let audioPart: { inlineData: { mimeType: string; data: string } } | { fileData: { fileUri: string; mimeType: string } };
+  let uploadedFileName: string | null = null;
 
-  return result.response.text();
+  if (useFileApi) {
+    const { fileUri, mimeType, fileName } = await uploadAndWaitForActive(mp3Path, apiKey);
+    audioPart = { fileData: { fileUri, mimeType } };
+    uploadedFileName = fileName;
+  } else {
+    const base64Audio = readFileSync(mp3Path).toString('base64');
+    audioPart = { inlineData: { mimeType: 'audio/mp3', data: base64Audio } };
+  }
+
+  try {
+    const result = await model.generateContent([
+      audioPart,
+      {
+        text: '이 오디오의 내용을 한국어 텍스트로 정확하게 받아적어주세요. 강의 내용이므로 전문 용어를 정확히 표기하고, 문단을 적절히 나눠주세요.'
+      }
+    ]);
+
+    return result.response.text();
+  } finally {
+    if (uploadedFileName) {
+      await deleteUploadedFile(uploadedFileName, apiKey);
+    }
+  }
 }
 
 async function summarizeText(
@@ -154,9 +201,10 @@ export function transcribeWithRetry(
   mp3Path: string,
   apiKey: string,
   model: GeminiModelId,
+  useFileApi: boolean = false,
   maxRetries: number = GEMINI_MAX_RETRIES
 ): Promise<string> {
-  return withRetry(() => transcribeOne(mp3Path, apiKey, model), maxRetries);
+  return withRetry(() => transcribeOne(mp3Path, apiKey, model, useFileApi), maxRetries);
 }
 
 export function summarizeWithRetry(

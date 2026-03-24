@@ -50,7 +50,7 @@ export interface DownloadProgressData {
 export interface TranscribeProgressData {
   fileName: string;
   percent: number; // 0~100. 0-90 변환, 95 병합, 100 완료
-  status: 'transcribing' | 'merging' | 'done' | 'error';
+  status: 'converting' | 'uploading' | 'transcribing' | 'merging' | 'done' | 'error';
   currentPart?: number; // 분할 파일 중 현재 파트 번호
   totalParts?: number; // 분할 파일 총 파트 수
   currentFile?: number; // 일괄 변환 시 현재 파일 번호

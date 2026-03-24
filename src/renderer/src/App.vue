@@ -42,6 +42,7 @@ const {
   hasApiKey,
   selectedGeminiModel,
   withSummary,
+  useFileApi,
   isTranscribingBatch,
   transcribeProgressMap,
   transcribeStatusMap,
@@ -167,6 +168,7 @@ async function handleSaveGeminiModel(model: GeminiModelId): Promise<void> {
               <VideoList
                 v-else
                 v-model:with-summary="withSummary"
+                v-model:use-file-api="useFileApi"
                 :videos="videos"
                 :is-loading="isLoading"
                 :is-downloading-all="isDownloadingAll"

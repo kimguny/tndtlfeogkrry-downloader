@@ -3,7 +3,7 @@ import { DEFAULT_GEMINI_MODEL } from '../../../shared/config';
 import type { GeminiModelId } from '../../../shared/types';
 
 export interface TranscribeStatus {
-  status: 'transcribing' | 'merging' | 'done' | 'error';
+  status: 'converting' | 'uploading' | 'transcribing' | 'merging' | 'done' | 'error';
   currentPart?: number;
   totalParts?: number;
   currentFile?: number;
@@ -13,6 +13,7 @@ export interface TranscribeStatus {
 const hasApiKey = ref(false);
 const selectedGeminiModel = ref<GeminiModelId>(DEFAULT_GEMINI_MODEL);
 const withSummary = ref(true);
+const useFileApi = ref(false);
 const isTranscribing = ref(false);
 const isTranscribingBatch = ref(false);
 const transcribeProgressMap = ref<Record<string, number>>({});
@@ -23,6 +24,7 @@ interface UseTranscriberReturn {
   hasApiKey: Ref<boolean>;
   selectedGeminiModel: Ref<GeminiModelId>;
   withSummary: Ref<boolean>;
+  useFileApi: Ref<boolean>;
   isTranscribing: Ref<boolean>;
   isTranscribingBatch: Ref<boolean>;
   transcribeProgressMap: Ref<Record<string, number>>;
@@ -42,6 +44,42 @@ interface UseTranscriberReturn {
   openFile: (filePath: string) => Promise<void>;
 }
 
+function statusToMessage(data: {
+  fileName: string;
+  status: string;
+  currentPart?: number;
+  totalParts?: number;
+  currentFile?: number;
+  totalFiles?: number;
+}): string {
+  const name = data.fileName.replace(/\.[^.]+$/, '');
+  const fileInfo =
+    data.totalFiles && data.totalFiles > 1
+      ? ` [${data.currentFile}/${data.totalFiles}]`
+      : '';
+  const partInfo =
+    data.totalParts && data.totalParts > 1
+      ? ` (파트 ${data.currentPart}/${data.totalParts})`
+      : '';
+
+  switch (data.status) {
+    case 'converting':
+      return `MP3 변환 중${fileInfo}: ${name}`;
+    case 'uploading':
+      return `파일 업로드 중${fileInfo}${partInfo}: ${name}`;
+    case 'transcribing':
+      return `텍스트 변환 중${fileInfo}${partInfo}: ${name}`;
+    case 'merging':
+      return `파트 병합 중${fileInfo}: ${name}`;
+    case 'done':
+      return `변환 완료${fileInfo}: ${name}`;
+    case 'error':
+      return `변환 실패${fileInfo}: ${name}`;
+    default:
+      return `처리 중: ${name}`;
+  }
+}
+
 export function useTranscriber(): UseTranscriberReturn {
   window.api.onTranscribeProgress((data) => {
     transcribeProgressMap.value[data.fileName] = data.percent;
@@ -52,6 +90,7 @@ export function useTranscriber(): UseTranscriberReturn {
       currentFile: data.currentFile,
       totalFiles: data.totalFiles
     };
+    transcribeMessage.value = statusToMessage(data);
   });
 
   onUnmounted(() => {
@@ -99,7 +138,7 @@ export function useTranscriber(): UseTranscriberReturn {
     transcribeProgressMap.value[fileName] = 0;
     transcribeMessage.value = `텍스트 변환 중: ${fileName}`;
 
-    const result = await window.api.transcribeAudio(filePath, withSummary.value);
+    const result = await window.api.transcribeAudio(filePath, withSummary.value, useFileApi.value);
 
     isTranscribing.value = false;
 
@@ -116,7 +155,7 @@ export function useTranscriber(): UseTranscriberReturn {
     isTranscribingBatch.value = true;
     transcribeMessage.value = '전체 텍스트 변환을 시작합니다...';
 
-    const result = await window.api.transcribeBatch(dirPath, withSummary.value);
+    const result = await window.api.transcribeBatch(dirPath, withSummary.value, useFileApi.value);
 
     isTranscribingBatch.value = false;
 
@@ -134,7 +173,12 @@ export function useTranscriber(): UseTranscriberReturn {
     isTranscribingBatch.value = true;
     transcribeMessage.value = '전체 다운로드 및 텍스트 변환을 시작합니다...';
 
-    const result = await window.api.downloadAndTranscribeAll(videos, folderPath, withSummary.value);
+    const result = await window.api.downloadAndTranscribeAll(
+      videos,
+      folderPath,
+      withSummary.value,
+      useFileApi.value
+    );
 
     isTranscribingBatch.value = false;
 
@@ -158,6 +202,7 @@ export function useTranscriber(): UseTranscriberReturn {
     hasApiKey,
     selectedGeminiModel,
     withSummary,
+    useFileApi,
     isTranscribing,
     isTranscribingBatch,
     transcribeProgressMap,

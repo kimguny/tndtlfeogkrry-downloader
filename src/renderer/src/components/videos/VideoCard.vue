@@ -46,6 +46,13 @@ const statusLabel = computed(() => {
 
 const transcribeLabel = computed(() => {
   if (!props.transcribeStatus) return null;
+  if (props.transcribeStatus.status === 'converting') return 'MP3 변환 중...';
+  if (props.transcribeStatus.status === 'uploading') {
+    if (props.transcribeStatus.totalParts && props.transcribeStatus.totalParts > 1) {
+      return `파일 업로드 중 (${props.transcribeStatus.currentPart}/${props.transcribeStatus.totalParts})`;
+    }
+    return '파일 업로드 중...';
+  }
   if (props.transcribeStatus.status === 'transcribing') {
     if (props.transcribeStatus.totalParts && props.transcribeStatus.totalParts > 1) {
       return `텍스트 변환 중 (${props.transcribeStatus.currentPart}/${props.transcribeStatus.totalParts})`;
@@ -60,6 +67,8 @@ const transcribeLabel = computed(() => {
 
 const isTranscribing = computed(
   () =>
+    props.transcribeStatus?.status === 'converting' ||
+    props.transcribeStatus?.status === 'uploading' ||
     props.transcribeStatus?.status === 'transcribing' ||
     props.transcribeStatus?.status === 'merging'
 );

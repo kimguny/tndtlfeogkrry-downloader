@@ -77,20 +77,22 @@ const api = {
 
   transcribeAudio: (
     filePath: string,
-    withSummary?: boolean
+    withSummary?: boolean,
+    useFileApi?: boolean
   ): Promise<{ success: boolean; text?: string; txtPath?: string; error?: string }> =>
-    ipcRenderer.invoke(IPC.TRANSCRIBE_AUDIO, filePath, withSummary ?? true),
+    ipcRenderer.invoke(IPC.TRANSCRIBE_AUDIO, filePath, withSummary ?? true, useFileApi ?? false),
 
   transcribeBatch: (
     dirPath: string,
-    withSummary?: boolean
+    withSummary?: boolean,
+    useFileApi?: boolean
   ): Promise<{
     success: boolean;
     error?: string;
     results?: { fileName: string; success: boolean; error?: string }[];
     successCount?: number;
     total?: number;
-  }> => ipcRenderer.invoke(IPC.TRANSCRIBE_BATCH, dirPath, withSummary ?? true),
+  }> => ipcRenderer.invoke(IPC.TRANSCRIBE_BATCH, dirPath, withSummary ?? true, useFileApi ?? false),
 
   openFile: (filePath: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke(IPC.OPEN_FILE, filePath),
@@ -104,7 +106,8 @@ const api = {
   downloadAndTranscribeAll: (
     videos: VideoRef[],
     folderPath?: string,
-    withSummary?: boolean
+    withSummary?: boolean,
+    useFileApi?: boolean
   ): Promise<{
     success: boolean;
     error?: string;
@@ -112,7 +115,13 @@ const api = {
     transcribeSuccessCount?: number;
     total?: number;
   }> =>
-    ipcRenderer.invoke(IPC.DOWNLOAD_AND_TRANSCRIBE_ALL, videos, folderPath, withSummary ?? true),
+    ipcRenderer.invoke(
+      IPC.DOWNLOAD_AND_TRANSCRIBE_ALL,
+      videos,
+      folderPath,
+      withSummary ?? true,
+      useFileApi ?? false
+    ),
 
   onTranscribeProgress: (callback: (data: TranscribeProgressData) => void): void => {
     ipcRenderer.on(IPC_EVENT.TRANSCRIBE_PROGRESS, (_event, data) => callback(data));
