@@ -12,7 +12,7 @@ export const MAX_CONCURRENT_DOWNLOADS = 3;
 /** 동시 텍스트 변환 최대 개수 */
 export const MAX_CONCURRENT_TRANSCRIPTIONS = 2;
 
-export const DEFAULT_GEMINI_MODEL: GeminiModelId = 'gemini-2.5-flash';
+export const DEFAULT_GEMINI_MODEL: GeminiModelId = 'gemini-2.0-flash';
 
 export const GEMINI_MODEL_OPTIONS: GeminiModelOption[] = [
   {
@@ -39,6 +39,11 @@ export const GEMINI_MODEL_OPTIONS: GeminiModelOption[] = [
     id: 'gemini-2.5-flash-lite',
     label: 'Gemini 2.5 Flash-Lite',
     description: '2.5 계열에서 가장 빠르고 예산 친화적인 멀티모달 모델'
+  },
+  {
+    id: 'gemini-2.0-flash',
+    label: 'Gemini 2.0 Flash (기본)',
+    description: 'STT에 최적화된 빠르고 가벼운 모델, 무료 할당량 넉넉'
   }
 ];
 
