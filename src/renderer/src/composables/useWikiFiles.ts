@@ -19,6 +19,14 @@ const summarizingWikiFileUrls = ref<Set<string>>(new Set());
 const wikiDownloadedPaths = ref<Record<string, string>>({});
 const wikiMessage = ref('');
 
+function pushWikiMessage(msg: string): void {
+  // 같은 문구 연속 발생 시에도 App.vue watch가 다시 반응하도록 리셋 후 재설정
+  wikiMessage.value = '';
+  setTimeout(() => {
+    wikiMessage.value = msg;
+  }, 0);
+}
+
 export function useWikiFiles(): UseWikiFilesReturn {
   async function loadWikiFileHistory(): Promise<void> {
     const result = await window.api.getWikiFileHistory();
@@ -62,16 +70,16 @@ export function useWikiFiles(): UseWikiFilesReturn {
           [file.downloadUrl]: result.filePath
         };
       }
-      wikiMessage.value = `수업자료 다운로드 완료: ${file.title}`;
+      pushWikiMessage(`수업자료 다운로드 완료: ${file.title}`);
     } else if (result.error !== 'cancelled') {
-      wikiMessage.value = `수업자료 다운로드 실패 (${file.title}): ${result.error}`;
+      pushWikiMessage(`수업자료 다운로드 실패 (${file.title}): ${result.error}`);
     }
   }
 
   async function summarizeWikiFile(file: WikiPageFileItem): Promise<void> {
     const filePath = wikiDownloadedPaths.value[file.downloadUrl];
     if (!filePath) {
-      wikiMessage.value = `먼저 PDF를 다운로드하세요: ${file.title}`;
+      pushWikiMessage(`먼저 PDF를 다운로드하세요: ${file.title}`);
       return;
     }
 
@@ -90,9 +98,9 @@ export function useWikiFiles(): UseWikiFilesReturn {
       const summarizedSet = new Set(summarizedWikiFileUrls.value);
       summarizedSet.add(file.downloadUrl);
       summarizedWikiFileUrls.value = summarizedSet;
-      wikiMessage.value = `PDF 요약 완료: ${file.title}`;
+      pushWikiMessage(`PDF 요약 완료: ${file.title}`);
     } else {
-      wikiMessage.value = `PDF 요약 실패 (${file.title}): ${result.error}`;
+      pushWikiMessage(`PDF 요약 실패 (${file.title}): ${result.error}`);
     }
   }
 
