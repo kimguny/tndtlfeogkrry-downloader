@@ -1,14 +1,15 @@
 import { BrowserWindow, ipcMain, dialog } from 'electron';
-import { createWriteStream } from 'fs';
+import { createWriteStream, writeFileSync } from 'fs';
 import { unlink } from 'fs/promises';
 import https from 'https';
-import { resolve, basename } from 'path';
+import { resolve, basename, extname } from 'path';
 import { IPC, IPC_EVENT } from '../../shared/channels';
 import { MAX_CONCURRENT_DOWNLOADS, toSafeFileName } from '../../shared/config';
 import type { DownloadMeta, VideoRefWithMeta } from '../../shared/types';
 import { downloadOne } from '../services/download';
 import { addRecord } from '../services/history';
 import { getLmsSession } from '../window';
+import { loadGeminiApiKey, loadGeminiModel, summarizePdfWithRetry } from '../services/gemini';
 
 export function registerDownloadHandlers(): void {
   ipcMain.handle(
@@ -39,9 +40,7 @@ export function registerDownloadHandlers(): void {
         const cookies = await lmsSession.cookies.get({ url: downloadUrl });
         const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
 
-        const downloadByHttps = (
-          url: string
-        ): Promise<{ success: boolean; error?: string }> =>
+        const downloadByHttps = (url: string): Promise<{ success: boolean; error?: string }> =>
           new Promise((resolveDownload) => {
             const req = https.get(
               url,
@@ -105,6 +104,31 @@ export function registerDownloadHandlers(): void {
       }
     }
   );
+
+  ipcMain.handle(IPC.SUMMARIZE_WIKI_PDF, async (_event, filePath: string) => {
+    const apiKey = loadGeminiApiKey();
+    const geminiModel = loadGeminiModel();
+    if (!apiKey) {
+      return { success: false, error: 'Gemini API 키가 설정되지 않았습니다.' };
+    }
+
+    if (extname(filePath).toLowerCase() !== '.pdf') {
+      return { success: false, error: 'PDF 파일만 요약할 수 있습니다.' };
+    }
+
+    try {
+      const summaryText = await summarizePdfWithRetry(filePath, apiKey, geminiModel);
+      const summaryPath = filePath.replace(/\.pdf$/i, '_요약본.md');
+      writeFileSync(summaryPath, summaryText, 'utf-8');
+      return { success: true, summaryPath };
+    } catch (err) {
+      const message = (err as Error).message;
+      if (message.includes('할당량이 소진')) {
+        return { success: false, error: message };
+      }
+      return { success: false, error: `PDF 요약 실패: ${message}` };
+    }
+  });
 
   ipcMain.handle(
     IPC.DOWNLOAD_VIDEO,

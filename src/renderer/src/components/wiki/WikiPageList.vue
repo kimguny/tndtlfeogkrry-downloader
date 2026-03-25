@@ -1,5 +1,15 @@
 <script setup lang="ts">
-import { ArrowLeft, FileText, ExternalLink, Download, FolderOpen, X, Loader2 } from 'lucide-vue-next';
+import {
+  ArrowLeft,
+  FileText,
+  ExternalLink,
+  Download,
+  FolderOpen,
+  X,
+  Loader2,
+  CheckCircle2,
+  Sparkles
+} from 'lucide-vue-next';
 import type { WikiPageItem, WikiPageFileItem } from '../../types';
 
 defineProps<{
@@ -7,6 +17,10 @@ defineProps<{
   isLoading: boolean;
   downloadFolder?: string | null;
   downloadingFileUrls?: Set<string>;
+  downloadedFileUrls?: Set<string>;
+  summarizedFileUrls?: Set<string>;
+  summarizingFileUrls?: Set<string>;
+  hasApiKey?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -14,6 +28,7 @@ const emit = defineEmits<{
   selectFolder: [];
   clearFolder: [];
   downloadFile: [file: WikiPageFileItem];
+  summarizeFile: [file: WikiPageFileItem];
 }>();
 </script>
 
@@ -103,6 +118,7 @@ const emit = defineEmits<{
           >
             <p class="text-sm text-text-1 truncate">{{ file.title }}</p>
             <button
+              v-if="!downloadedFileUrls?.has(file.downloadUrl)"
               class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-white hover:bg-primary-hover disabled:opacity-60 shrink-0 whitespace-nowrap"
               :disabled="downloadingFileUrls?.has(file.downloadUrl)"
               @click="emit('downloadFile', file)"
@@ -115,6 +131,34 @@ const emit = defineEmits<{
               <Download v-else :size="13" />
               다운로드
             </button>
+            <button
+              v-else-if="hasApiKey && !summarizedFileUrls?.has(file.downloadUrl)"
+              class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-60 shrink-0 whitespace-nowrap"
+              :disabled="summarizingFileUrls?.has(file.downloadUrl)"
+              @click="emit('summarizeFile', file)"
+            >
+              <Loader2
+                v-if="summarizingFileUrls?.has(file.downloadUrl)"
+                :size="13"
+                class="animate-spin"
+              />
+              <Sparkles v-else :size="13" />
+              PDF 요약
+            </button>
+            <span
+              v-if="downloadedFileUrls?.has(file.downloadUrl)"
+              class="inline-flex items-center gap-1 text-xs font-semibold text-green-600 shrink-0"
+            >
+              <CheckCircle2 :size="14" />
+              다운로드됨
+            </span>
+            <span
+              v-if="summarizedFileUrls?.has(file.downloadUrl)"
+              class="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 shrink-0"
+            >
+              <Sparkles :size="14" />
+              요약완료
+            </span>
           </div>
         </div>
       </section>

@@ -3,6 +3,8 @@ export type {
   VideoItem,
   WikiPageItem,
   WikiPageFileItem,
+  WikiFileHistoryRecord,
+  WikiFileHistoryRecordWithStatus,
   VideoRef,
   DownloadProgressData,
   TranscribeProgressData,

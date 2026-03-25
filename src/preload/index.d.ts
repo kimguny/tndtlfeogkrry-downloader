@@ -3,6 +3,8 @@ import type {
   CourseItem,
   VideoItem,
   WikiPageItem,
+  WikiFileHistoryRecord,
+  WikiFileHistoryRecordWithStatus,
   VideoRefWithMeta,
   DownloadMeta,
   DownloadProgressData,
@@ -37,6 +39,9 @@ interface DownloadApi {
     title: string,
     folderPath?: string
   ) => Promise<{ success: boolean; error?: string; filePath?: string }>;
+  summarizeWikiPdf: (
+    filePath: string
+  ) => Promise<{ success: boolean; error?: string; summaryPath?: string }>;
   downloadAll: (
     videos: VideoRefWithMeta[],
     format?: 'mp4' | 'mp3',
@@ -115,6 +120,12 @@ interface DownloadApi {
   ) => Promise<{ success: boolean }>;
   removeHistory: (contentId: string) => Promise<{ success: boolean }>;
   showInFolder: (filePath: string) => Promise<{ success: boolean }>;
+  getWikiFileHistory: () => Promise<{
+    success: boolean;
+    records?: WikiFileHistoryRecordWithStatus[];
+  }>;
+  addWikiFileHistory: (record: WikiFileHistoryRecord) => Promise<{ success: boolean }>;
+  updateWikiFileSummary: (downloadUrl: string, summaryPath: string) => Promise<{ success: boolean }>;
 }
 
 declare global {

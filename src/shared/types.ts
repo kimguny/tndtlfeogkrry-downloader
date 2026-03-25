@@ -44,6 +44,19 @@ export interface WikiPageFileItem {
   downloadUrl: string;
   apiEndpoint?: string;
 }
+
+export interface WikiFileHistoryRecord {
+  downloadUrl: string;
+  title: string;
+  filePath: string;
+  downloadedAt: string; // ISO 8601
+  summaryPath?: string;
+}
+
+export interface WikiFileHistoryRecordWithStatus extends WikiFileHistoryRecord {
+  fileExists: boolean;
+  summaryExists: boolean;
+}
 /** 다운로드/변환 요청용 최소 참조 (contentId + title만 필요) */
 export interface VideoRef {
   contentId: string;

@@ -5,6 +5,7 @@ import type { GeminiModelId } from '../../shared/types';
 import type { VideoItem, WikiPageFileItem } from './types';
 import { useDownloader } from './composables/useDownloader';
 import { useTranscriber } from './composables/useTranscriber';
+import { useWikiFiles } from './composables/useWikiFiles';
 import Sidebar from './components/layout/Sidebar.vue';
 import StatusMessage from './components/layout/StatusMessage.vue';
 import LoginScreen from './components/login/LoginScreen.vue';
@@ -64,9 +65,18 @@ const {
 const showSettings = ref(false);
 const showLibrary = ref(false);
 const contentTab = ref<'video' | 'wiki'>('video');
-const downloadingWikiFileUrls = ref<Set<string>>(new Set());
 const toastMessage = ref('');
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
+const {
+  downloadingWikiFileUrls,
+  downloadedWikiFileUrls,
+  summarizedWikiFileUrls,
+  summarizingWikiFileUrls,
+  loadWikiFileHistory,
+  downloadWikiFile,
+  summarizeWikiFile,
+  wikiMessage
+} = useWikiFiles();
 
 const activeView = computed<'courses' | 'library'>(() =>
   showLibrary.value ? 'library' : 'courses'
@@ -76,6 +86,7 @@ onMounted(() => {
   checkApiKey();
   loadGeminiModel();
   loadHistoryIds();
+  loadWikiFileHistory();
 });
 
 onUnmounted(() => {
@@ -86,6 +97,9 @@ onUnmounted(() => {
 
 // transcribeMessage가 있으면 message에 반영
 watch(transcribeMessage, (val) => {
+  if (val) message.value = val;
+});
+watch(wikiMessage, (val) => {
   if (val) message.value = val;
 });
 
@@ -236,25 +250,11 @@ async function handleSaveGeminiModel(model: GeminiModelId): Promise<void> {
 }
 
 async function handleDownloadWikiFile(file: WikiPageFileItem): Promise<void> {
-  const nextSet = new Set(downloadingWikiFileUrls.value);
-  nextSet.add(file.downloadUrl);
-  downloadingWikiFileUrls.value = nextSet;
+  await downloadWikiFile(file, downloadFolder.value ?? undefined);
+}
 
-  const result = await window.api.downloadWikiFile(
-    file.downloadUrl,
-    file.title,
-    downloadFolder.value ?? undefined
-  );
-
-  const doneSet = new Set(downloadingWikiFileUrls.value);
-  doneSet.delete(file.downloadUrl);
-  downloadingWikiFileUrls.value = doneSet;
-
-  if (result.success) {
-    message.value = `수업자료 다운로드 완료: ${file.title}`;
-  } else if (result.error !== 'cancelled') {
-    message.value = `수업자료 다운로드 실패 (${file.title}): ${result.error}`;
-  }
+async function handleSummarizeWikiFile(file: WikiPageFileItem): Promise<void> {
+  await summarizeWikiFile(file);
 }
 </script>
 
@@ -353,10 +353,15 @@ async function handleDownloadWikiFile(file: WikiPageFileItem): Promise<void> {
                   :is-loading="isLoading"
                   :download-folder="downloadFolder"
                   :downloading-file-urls="downloadingWikiFileUrls"
+                  :downloaded-file-urls="downloadedWikiFileUrls"
+                  :summarized-file-urls="summarizedWikiFileUrls"
+                  :summarizing-file-urls="summarizingWikiFileUrls"
+                  :has-api-key="hasApiKey"
                   @back="handleBackToCourses"
                   @select-folder="selectDownloadFolder"
                   @clear-folder="clearDownloadFolder"
                   @download-file="handleDownloadWikiFile"
+                  @summarize-file="handleSummarizeWikiFile"
                 />
               </div>
             </Transition>
