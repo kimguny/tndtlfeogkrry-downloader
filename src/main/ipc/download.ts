@@ -1,12 +1,135 @@
 import { BrowserWindow, ipcMain, dialog } from 'electron';
-import { resolve } from 'path';
+import { createWriteStream, writeFileSync } from 'fs';
+import { unlink } from 'fs/promises';
+import https from 'https';
+import { resolve, basename, extname } from 'path';
 import { IPC, IPC_EVENT } from '../../shared/channels';
 import { MAX_CONCURRENT_DOWNLOADS, toSafeFileName } from '../../shared/config';
 import type { DownloadMeta, VideoRefWithMeta } from '../../shared/types';
 import { downloadOne } from '../services/download';
 import { addRecord } from '../services/history';
+import { getLmsSession } from '../window';
+import { loadGeminiApiKey, loadGeminiModel, summarizePdfWithRetry } from '../services/gemini';
 
 export function registerDownloadHandlers(): void {
+  ipcMain.handle(
+    IPC.DOWNLOAD_WIKI_FILE,
+    async (event, downloadUrl: string, title: string, folderPath?: string) => {
+      const mainWin = BrowserWindow.fromWebContents(event.sender);
+      if (!mainWin) return { success: false, error: 'No window found' };
+
+      const fallbackName = basename(new URL(downloadUrl).pathname) || 'downloaded-file';
+      const safeName = toSafeFileName(title || fallbackName);
+      let filePath: string;
+
+      if (folderPath) {
+        filePath = resolve(folderPath, safeName);
+      } else {
+        const saveResult = await dialog.showSaveDialog(mainWin, {
+          defaultPath: safeName
+        });
+
+        if (saveResult.canceled || !saveResult.filePath) {
+          return { success: false, error: 'cancelled' };
+        }
+        filePath = saveResult.filePath;
+      }
+
+      try {
+        const lmsSession = getLmsSession();
+        const cookies = await lmsSession.cookies.get({ url: downloadUrl });
+        const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+
+        const downloadByHttps = (url: string): Promise<{ success: boolean; error?: string }> =>
+          new Promise((resolveDownload) => {
+            const req = https.get(
+              url,
+              {
+                headers: {
+                  ...(cookieHeader ? { Cookie: cookieHeader } : {}),
+                  Referer: 'https://canvas.ssu.ac.kr/'
+                }
+              },
+              (res) => {
+                if (
+                  res.statusCode &&
+                  res.statusCode >= 300 &&
+                  res.statusCode < 400 &&
+                  res.headers.location
+                ) {
+                  res.resume();
+                  const redirectUrl = new URL(res.headers.location, url).toString();
+                  downloadByHttps(redirectUrl).then(resolveDownload);
+                  return;
+                }
+
+                if (res.statusCode !== 200) {
+                  res.resume();
+                  resolveDownload({
+                    success: false,
+                    error: `수업자료 다운로드 실패: HTTP ${res.statusCode}`
+                  });
+                  return;
+                }
+
+                const fileStream = createWriteStream(filePath);
+                res.pipe(fileStream);
+
+                fileStream.on('finish', () => {
+                  resolveDownload({ success: true });
+                });
+
+                fileStream.on('error', async (streamErr) => {
+                  await unlink(filePath).catch(() => {});
+                  resolveDownload({ success: false, error: (streamErr as Error).message });
+                });
+
+                res.on('error', async (resErr) => {
+                  await unlink(filePath).catch(() => {});
+                  resolveDownload({ success: false, error: (resErr as Error).message });
+                });
+              }
+            );
+
+            req.on('error', (reqErr) => {
+              resolveDownload({ success: false, error: (reqErr as Error).message });
+            });
+          });
+
+        const dl = await downloadByHttps(downloadUrl);
+        if (!dl.success) return dl;
+        return { success: true, filePath };
+      } catch (err) {
+        return { success: false, error: (err as Error).message };
+      }
+    }
+  );
+
+  ipcMain.handle(IPC.SUMMARIZE_WIKI_PDF, async (_event, filePath: string) => {
+    const apiKey = loadGeminiApiKey();
+    const geminiModel = loadGeminiModel();
+    if (!apiKey) {
+      return { success: false, error: 'Gemini API 키가 설정되지 않았습니다.' };
+    }
+
+    if (extname(filePath).toLowerCase() !== '.pdf') {
+      return { success: false, error: 'PDF 파일만 요약할 수 있습니다.' };
+    }
+
+    try {
+      const summaryText = await summarizePdfWithRetry(filePath, apiKey, geminiModel);
+      const summaryPath = filePath.replace(/\.pdf$/i, '_요약본.md');
+      writeFileSync(summaryPath, summaryText, 'utf-8');
+      return { success: true, summaryPath };
+    } catch (err) {
+      const message = (err as Error).message;
+      if (message.includes('할당량이 소진')) {
+        return { success: false, error: message };
+      }
+      return { success: false, error: `PDF 요약 실패: ${message}` };
+    }
+  });
+
   ipcMain.handle(
     IPC.DOWNLOAD_VIDEO,
     async (

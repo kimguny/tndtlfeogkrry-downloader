@@ -149,6 +149,54 @@ async function summarizeText(
 
   return result.response.text();
 }
+
+async function summarizePdfFile(
+  pdfPath: string,
+  apiKey: string,
+  modelName: GeminiModelId
+): Promise<string> {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: modelName });
+  const fileManager = new GoogleAIFileManager(apiKey);
+
+  const uploadResult = await fileManager.uploadFile(pdfPath, {
+    mimeType: 'application/pdf',
+    displayName: basename(pdfPath)
+  });
+
+  let file = uploadResult.file;
+  while (file.state === FileState.PROCESSING) {
+    await new Promise((r) => setTimeout(r, 2000));
+    file = await fileManager.getFile(file.name);
+  }
+
+  if (file.state === FileState.FAILED) {
+    throw new Error('Gemini File API: PDF 파일 처리에 실패했습니다.');
+  }
+
+  try {
+    const result = await model.generateContent([
+      {
+        fileData: {
+          fileUri: file.uri,
+          mimeType: file.mimeType
+        }
+      },
+      {
+        text: `이 PDF 강의자료를 한국어로 요약하세요.
+요구사항:
+1) 핵심 개념 3~5개
+2) 중요 포인트 5개 bullet
+3) 마지막에 한 줄 결론
+
+원문에 없는 내용은 추측하지 마세요.`
+      }
+    ]);
+    return result.response.text();
+  } finally {
+    await deleteUploadedFile(file.name, apiKey);
+  }
+}
 /**
  * 에러 메시지에서 retryDelay 값을 추출한다.
  * Gemini API가 "Please retry in XX.XXs" 형태로 권장 대기 시간을 알려준다.
@@ -216,6 +264,15 @@ export function summarizeWithRetry(
   maxRetries: number = GEMINI_MAX_RETRIES
 ): Promise<string> {
   return withRetry(() => summarizeText(text, apiKey, model), maxRetries);
+}
+
+export function summarizePdfWithRetry(
+  pdfPath: string,
+  apiKey: string,
+  model: GeminiModelId,
+  maxRetries: number = GEMINI_MAX_RETRIES
+): Promise<string> {
+  return withRetry(() => summarizePdfFile(pdfPath, apiKey, model), maxRetries);
 }
 
 /**

@@ -2,14 +2,16 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { GEMINI_MODEL_OPTIONS, toSafeFileName } from '../../shared/config';
 import type { GeminiModelId } from '../../shared/types';
-import type { VideoItem } from './types';
+import type { VideoItem, WikiPageFileItem } from './types';
 import { useDownloader } from './composables/useDownloader';
 import { useTranscriber } from './composables/useTranscriber';
+import { useWikiFiles } from './composables/useWikiFiles';
 import Sidebar from './components/layout/Sidebar.vue';
 import StatusMessage from './components/layout/StatusMessage.vue';
 import LoginScreen from './components/login/LoginScreen.vue';
 import CourseList from './components/courses/CourseList.vue';
 import VideoList from './components/videos/VideoList.vue';
+import WikiPageList from './components/wiki/WikiPageList.vue';
 import ApiKeySettings from './components/settings/ApiKeySettings.vue';
 import LibraryView from './components/library/LibraryView.vue';
 
@@ -18,6 +20,7 @@ const {
   courses,
   selectedCourseId,
   videos,
+  wikiPages,
   isLoading,
   message,
   downloadingIds,
@@ -61,8 +64,19 @@ const {
 
 const showSettings = ref(false);
 const showLibrary = ref(false);
+const contentTab = ref<'video' | 'wiki'>('video');
 const toastMessage = ref('');
 let toastTimer: ReturnType<typeof setTimeout> | null = null;
+const {
+  downloadingWikiFileUrls,
+  downloadedWikiFileUrls,
+  summarizedWikiFileUrls,
+  summarizingWikiFileUrls,
+  loadWikiFileHistory,
+  downloadWikiFile,
+  summarizeWikiFile,
+  wikiMessage
+} = useWikiFiles();
 
 const activeView = computed<'courses' | 'library'>(() =>
   showLibrary.value ? 'library' : 'courses'
@@ -72,6 +86,7 @@ onMounted(() => {
   checkApiKey();
   loadGeminiModel();
   loadHistoryIds();
+  loadWikiFileHistory();
 });
 
 onUnmounted(() => {
@@ -82,6 +97,9 @@ onUnmounted(() => {
 
 // transcribeMessage가 있으면 message에 반영
 watch(transcribeMessage, (val) => {
+  if (val) message.value = val;
+});
+watch(wikiMessage, (val) => {
   if (val) message.value = val;
 });
 
@@ -118,7 +136,22 @@ function openLibrary(): void {
 
 function openCourses(): void {
   showLibrary.value = false;
+  contentTab.value = 'video';
   selectedCourseId.value = null;
+}
+
+async function handleSelectCourse(course: {
+  id: string;
+  name: string;
+  term: string;
+}): Promise<void> {
+  contentTab.value = 'video';
+  await selectCourse(course);
+}
+
+function handleBackToCourses(): void {
+  contentTab.value = 'video';
+  goBackToCourses();
 }
 
 /** txtPath에서 요약본 경로를 도출 */
@@ -215,6 +248,14 @@ async function handleDeleteApiKey(): Promise<void> {
 async function handleSaveGeminiModel(model: GeminiModelId): Promise<void> {
   await saveGeminiModel(model);
 }
+
+async function handleDownloadWikiFile(file: WikiPageFileItem): Promise<void> {
+  await downloadWikiFile(file, downloadFolder.value ?? undefined);
+}
+
+async function handleSummarizeWikiFile(file: WikiPageFileItem): Promise<void> {
+  await summarizeWikiFile(file);
+}
 </script>
 
 <template>
@@ -248,37 +289,81 @@ async function handleSaveGeminiModel(model: GeminiModelId): Promise<void> {
                 :is-loading="isLoading"
                 @refresh="fetchCourses"
                 @relogin="login"
-                @select="selectCourse"
+                @select="handleSelectCourse"
               />
 
-              <VideoList
-                v-else
-                v-model:with-summary="withSummary"
-                v-model:use-file-api="useFileApi"
-                :videos="videos"
-                :is-loading="isLoading"
-                :is-downloading-all="isDownloadingAll"
-                :downloading-ids="downloadingIds"
-                :progress-map="progressMap"
-                :status-map="statusMap"
-                :format-duration="formatDuration"
-                :format-size="formatSize"
-                :has-api-key="hasApiKey"
-                :is-transcribing-batch="isTranscribingBatch"
-                :transcribe-progress-map="transcribeProgressMap"
-                :transcribe-status-map="transcribeStatusMap"
-                :download-folder="downloadFolder"
-                :history-content-ids="historyContentIds"
-                @back="goBackToCourses"
-                @download-all="handleDownloadAll"
-                @download-selected="handleDownloadSelected"
-                @download="download"
-                @transcribe="handleTranscribe"
-                @transcribe-all="handleTranscribeAll"
-                @transcribe-selected="handleTranscribeSelected"
-                @select-folder="selectDownloadFolder"
-                @clear-folder="clearDownloadFolder"
-              />
+              <div v-else class="h-full flex flex-col">
+                <div class="mb-5 flex items-center gap-2">
+                  <button
+                    class="px-4 py-2 rounded-xl text-sm font-bold transition-all"
+                    :class="
+                      contentTab === 'video'
+                        ? 'bg-primary text-white shadow-md'
+                        : 'bg-surface-mute text-text-2 hover:text-text-1'
+                    "
+                    @click="contentTab = 'video'"
+                  >
+                    비디오 ({{ videos.length }})
+                  </button>
+                  <button
+                    class="px-4 py-2 rounded-xl text-sm font-bold transition-all"
+                    :class="
+                      contentTab === 'wiki'
+                        ? 'bg-primary text-white shadow-md'
+                        : 'bg-surface-mute text-text-2 hover:text-text-1'
+                    "
+                    @click="contentTab = 'wiki'"
+                  >
+                    수업자료 ({{ wikiPages.length }})
+                  </button>
+                </div>
+
+                <VideoList
+                  v-if="contentTab === 'video'"
+                  v-model:with-summary="withSummary"
+                  v-model:use-file-api="useFileApi"
+                  :videos="videos"
+                  :is-loading="isLoading"
+                  :is-downloading-all="isDownloadingAll"
+                  :downloading-ids="downloadingIds"
+                  :progress-map="progressMap"
+                  :status-map="statusMap"
+                  :format-duration="formatDuration"
+                  :format-size="formatSize"
+                  :has-api-key="hasApiKey"
+                  :is-transcribing-batch="isTranscribingBatch"
+                  :transcribe-progress-map="transcribeProgressMap"
+                  :transcribe-status-map="transcribeStatusMap"
+                  :download-folder="downloadFolder"
+                  :history-content-ids="historyContentIds"
+                  @back="handleBackToCourses"
+                  @download-all="handleDownloadAll"
+                  @download-selected="handleDownloadSelected"
+                  @download="download"
+                  @transcribe="handleTranscribe"
+                  @transcribe-all="handleTranscribeAll"
+                  @transcribe-selected="handleTranscribeSelected"
+                  @select-folder="selectDownloadFolder"
+                  @clear-folder="clearDownloadFolder"
+                />
+
+                <WikiPageList
+                  v-else
+                  :wiki-pages="wikiPages"
+                  :is-loading="isLoading"
+                  :download-folder="downloadFolder"
+                  :downloading-file-urls="downloadingWikiFileUrls"
+                  :downloaded-file-urls="downloadedWikiFileUrls"
+                  :summarized-file-urls="summarizedWikiFileUrls"
+                  :summarizing-file-urls="summarizingWikiFileUrls"
+                  :has-api-key="hasApiKey"
+                  @back="handleBackToCourses"
+                  @select-folder="selectDownloadFolder"
+                  @clear-folder="clearDownloadFolder"
+                  @download-file="handleDownloadWikiFile"
+                  @summarize-file="handleSummarizeWikiFile"
+                />
+              </div>
             </Transition>
           </div>
         </Transition>

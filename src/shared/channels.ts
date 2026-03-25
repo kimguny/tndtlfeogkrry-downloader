@@ -5,6 +5,8 @@ export const IPC = {
   FETCH_MODULES: 'fetch-modules',
   DOWNLOAD_VIDEO: 'download-video',
   DOWNLOAD_ALL: 'download-all',
+  DOWNLOAD_WIKI_FILE: 'download-wiki-file',
+  SUMMARIZE_WIKI_PDF: 'summarize-wiki-pdf',
   SET_GEMINI_API_KEY: 'set-gemini-api-key',
   GET_GEMINI_API_KEY: 'get-gemini-api-key',
   DELETE_GEMINI_API_KEY: 'delete-gemini-api-key',
@@ -21,7 +23,10 @@ export const IPC = {
   ADD_HISTORY: 'add-history',
   UPDATE_HISTORY_TRANSCRIPTION: 'update-history-transcription',
   REMOVE_HISTORY: 'remove-history',
-  SHOW_IN_FOLDER: 'show-in-folder'
+  SHOW_IN_FOLDER: 'show-in-folder',
+  GET_WIKI_FILE_HISTORY: 'get-wiki-file-history',
+  ADD_WIKI_FILE_HISTORY: 'add-wiki-file-history',
+  UPDATE_WIKI_FILE_SUMMARY: 'update-wiki-file-summary'
 } as const;
 
 /** ipcMain.send / ipcRenderer.on 이벤트 채널명 */

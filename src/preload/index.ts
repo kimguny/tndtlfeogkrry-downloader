@@ -4,6 +4,9 @@ import { IPC, IPC_EVENT } from '../shared/channels';
 import type {
   CourseItem,
   VideoItem,
+  WikiPageItem,
+  WikiFileHistoryRecord,
+  WikiFileHistoryRecordWithStatus,
   VideoRefWithMeta,
   DownloadMeta,
   DownloadProgressData,
@@ -28,6 +31,7 @@ const api = {
     success: boolean;
     error?: string;
     videos?: VideoItem[];
+    wikiPages?: WikiPageItem[];
   }> => ipcRenderer.invoke(IPC.FETCH_MODULES, courseId),
 
   downloadVideo: (
@@ -38,6 +42,18 @@ const api = {
     meta?: DownloadMeta & { fileSize: number; duration: number }
   ): Promise<{ success: boolean; error?: string; filePath?: string }> =>
     ipcRenderer.invoke(IPC.DOWNLOAD_VIDEO, contentId, title, format || 'mp4', folderPath, meta),
+
+  downloadWikiFile: (
+    downloadUrl: string,
+    title: string,
+    folderPath?: string
+  ): Promise<{ success: boolean; error?: string; filePath?: string }> =>
+    ipcRenderer.invoke(IPC.DOWNLOAD_WIKI_FILE, downloadUrl, title, folderPath),
+
+  summarizeWikiPdf: (
+    filePath: string
+  ): Promise<{ success: boolean; error?: string; summaryPath?: string }> =>
+    ipcRenderer.invoke(IPC.SUMMARIZE_WIKI_PDF, filePath),
 
   downloadAll: (
     videos: VideoRefWithMeta[],
@@ -163,7 +179,21 @@ const api = {
     ipcRenderer.invoke(IPC.REMOVE_HISTORY, contentId),
 
   showInFolder: (filePath: string): Promise<{ success: boolean }> =>
-    ipcRenderer.invoke(IPC.SHOW_IN_FOLDER, filePath)
+    ipcRenderer.invoke(IPC.SHOW_IN_FOLDER, filePath),
+
+  getWikiFileHistory: (): Promise<{
+    success: boolean;
+    records?: WikiFileHistoryRecordWithStatus[];
+  }> => ipcRenderer.invoke(IPC.GET_WIKI_FILE_HISTORY),
+
+  addWikiFileHistory: (record: WikiFileHistoryRecord): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke(IPC.ADD_WIKI_FILE_HISTORY, record),
+
+  updateWikiFileSummary: (
+    downloadUrl: string,
+    summaryPath: string
+  ): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke(IPC.UPDATE_WIKI_FILE_SUMMARY, downloadUrl, summaryPath)
 };
 
 if (process.contextIsolated) {

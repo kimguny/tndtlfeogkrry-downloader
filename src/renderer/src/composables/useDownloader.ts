@@ -1,10 +1,11 @@
 import { ref, computed, onUnmounted, type Ref } from 'vue';
-import type { CourseItem, VideoItem } from '../types';
+import type { CourseItem, VideoItem, WikiPageItem } from '../types';
 
 const isLoggedIn = ref(false);
 const courses = ref<CourseItem[]>([]);
 const selectedCourseId = ref<string | null>(null);
 const videos = ref<VideoItem[]>([]);
+const wikiPages = ref<WikiPageItem[]>([]);
 const isLoading = ref(false);
 const message = ref('');
 const downloadingIds = ref<Set<string>>(new Set());
@@ -26,6 +27,7 @@ interface UseDownloaderReturn {
   courses: Ref<CourseItem[]>;
   selectedCourseId: Ref<string | null>;
   videos: Ref<VideoItem[]>;
+  wikiPages: Ref<WikiPageItem[]>;
   isLoading: Ref<boolean>;
   message: Ref<string>;
   downloadingIds: Ref<Set<string>>;
@@ -100,6 +102,7 @@ export function useDownloader(): UseDownloaderReturn {
     courses.value = [];
     selectedCourseId.value = null;
     videos.value = [];
+    wikiPages.value = [];
 
     const result = await window.api.fetchCourses();
 
@@ -121,17 +124,22 @@ export function useDownloader(): UseDownloaderReturn {
     isLoading.value = true;
     message.value = `${course.name} 강의 영상을 불러오는 중...`;
     videos.value = [];
+    wikiPages.value = [];
     progressMap.value = {};
 
     const result = await window.api.fetchModules(course.id);
 
     isLoading.value = false;
 
-    if (result.success && result.videos) {
-      videos.value = result.videos;
-      message.value = `${result.videos.length}개의 비디오를 찾았습니다.`;
-      if (result.videos.length === 0) {
-        message.value = '다운로드 가능한 비디오가 없습니다.';
+    if (result.success) {
+      videos.value = result.videos || [];
+      wikiPages.value = result.wikiPages || [];
+      const videoCount = videos.value.length;
+      const wikiCount = wikiPages.value.length;
+      if (videoCount === 0 && wikiCount === 0) {
+        message.value = '다운로드 가능한 비디오/수업자료가 없습니다.';
+      } else {
+        message.value = `비디오 ${videoCount}개, 수업자료 ${wikiCount}개를 찾았습니다.`;
       }
     } else if (result.error?.includes('로그인')) {
       isLoggedIn.value = false;
@@ -144,6 +152,7 @@ export function useDownloader(): UseDownloaderReturn {
   function goBackToCourses(): void {
     selectedCourseId.value = null;
     videos.value = [];
+    wikiPages.value = [];
     progressMap.value = {};
     downloadedPaths.value = {};
     message.value = '';
@@ -259,6 +268,7 @@ export function useDownloader(): UseDownloaderReturn {
     courses,
     selectedCourseId,
     videos,
+    wikiPages,
     isLoading,
     message,
     downloadingIds,
