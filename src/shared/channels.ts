@@ -5,6 +5,7 @@ export const IPC = {
   FETCH_MODULES: 'fetch-modules',
   DOWNLOAD_VIDEO: 'download-video',
   DOWNLOAD_ALL: 'download-all',
+  DOWNLOAD_WIKI_FILE: 'download-wiki-file',
   SET_GEMINI_API_KEY: 'set-gemini-api-key',
   GET_GEMINI_API_KEY: 'get-gemini-api-key',
   DELETE_GEMINI_API_KEY: 'delete-gemini-api-key',

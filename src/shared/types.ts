@@ -30,6 +30,20 @@ export interface VideoItem {
   available: boolean; // content_id가 유효한지 (not_open 등은 false)
 }
 
+export interface WikiPageItem {
+  title: string;
+  courseId: string;
+  weekPosition: number;
+  available: boolean;
+  url: string;
+  files: WikiPageFileItem[];
+}
+
+export interface WikiPageFileItem {
+  title: string;
+  downloadUrl: string;
+  apiEndpoint?: string;
+}
 /** 다운로드/변환 요청용 최소 참조 (contentId + title만 필요) */
 export interface VideoRef {
   contentId: string;

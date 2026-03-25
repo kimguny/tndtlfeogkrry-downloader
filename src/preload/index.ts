@@ -4,6 +4,7 @@ import { IPC, IPC_EVENT } from '../shared/channels';
 import type {
   CourseItem,
   VideoItem,
+  WikiPageItem,
   VideoRefWithMeta,
   DownloadMeta,
   DownloadProgressData,
@@ -28,6 +29,7 @@ const api = {
     success: boolean;
     error?: string;
     videos?: VideoItem[];
+    wikiPages?: WikiPageItem[];
   }> => ipcRenderer.invoke(IPC.FETCH_MODULES, courseId),
 
   downloadVideo: (
@@ -38,6 +40,13 @@ const api = {
     meta?: DownloadMeta & { fileSize: number; duration: number }
   ): Promise<{ success: boolean; error?: string; filePath?: string }> =>
     ipcRenderer.invoke(IPC.DOWNLOAD_VIDEO, contentId, title, format || 'mp4', folderPath, meta),
+
+  downloadWikiFile: (
+    downloadUrl: string,
+    title: string,
+    folderPath?: string
+  ): Promise<{ success: boolean; error?: string; filePath?: string }> =>
+    ipcRenderer.invoke(IPC.DOWNLOAD_WIKI_FILE, downloadUrl, title, folderPath),
 
   downloadAll: (
     videos: VideoRefWithMeta[],

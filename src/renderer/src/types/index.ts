@@ -1,6 +1,8 @@
 export type {
   CourseItem,
   VideoItem,
+  WikiPageItem,
+  WikiPageFileItem,
   VideoRef,
   DownloadProgressData,
   TranscribeProgressData,

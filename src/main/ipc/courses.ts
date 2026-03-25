@@ -1,6 +1,57 @@
 import { ipcMain } from 'electron';
 import { IPC } from '../../shared/channels';
-import { getOrCreateLmsWin } from '../window';
+import { getLmsSession, getOrCreateLmsWin } from '../window';
+
+const VIDEO_TYPES = ['everlec', 'movie', 'video', 'mp4'];
+
+interface WikiPageFileItem {
+  title: string;
+  downloadUrl: string;
+  apiEndpoint?: string;
+}
+
+function decodeHtml(value: string): string {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function isPdfFile(title: string, downloadUrl: string): boolean {
+  const lowerTitle = title.toLowerCase();
+  const lowerPath = new URL(downloadUrl).pathname.toLowerCase();
+  return lowerTitle.endsWith('.pdf') || lowerPath.endsWith('.pdf');
+}
+
+function extractWikiFilesFromHtml(html: string): WikiPageFileItem[] {
+  const files: WikiPageFileItem[] = [];
+  const anchorRegex =
+    /<a\b[^>]*class=["'][^"']*instructure_file_link[^"']*["'][^>]*>[\s\S]*?<\/a>/gi;
+
+  for (const anchor of html.match(anchorRegex) || []) {
+    const titleMatch = anchor.match(/\btitle=(["'])(.*?)\1/i);
+    const hrefMatch = anchor.match(/\bhref=(["'])(.*?)\1/i);
+    const apiEndpointMatch = anchor.match(/\bdata-api-endpoint=(["'])(.*?)\1/i);
+    const innerTextMatch = anchor.match(/>([\s\S]*?)<\/a>/i);
+
+    const title = decodeHtml((titleMatch?.[2] || innerTextMatch?.[1] || '첨부파일').trim());
+    const href = hrefMatch?.[2]?.trim();
+    if (!href) continue;
+
+    const downloadUrl = new URL(decodeHtml(href), 'https://canvas.ssu.ac.kr').toString();
+    if (!isPdfFile(title, downloadUrl)) continue;
+
+    files.push({
+      title,
+      downloadUrl,
+      apiEndpoint: apiEndpointMatch?.[2] ? decodeHtml(apiEndpointMatch[2]) : undefined
+    });
+  }
+
+  return files;
+}
 
 export function registerCoursesHandlers(): void {
   ipcMain.handle(IPC.FETCH_COURSES, async () => {
@@ -44,28 +95,9 @@ export function registerCoursesHandlers(): void {
     try {
       const win = getOrCreateLmsWin();
       const currentUrl = win.webContents.getURL();
-      console.log('현재 lmsWin URL:', currentUrl);
-
       if (!currentUrl.includes('canvas.ssu.ac.kr') || currentUrl.includes('/login')) {
         throw new Error('로그인이 필요합니다. 다시 로그인해주세요.');
       }
-
-      // LearningX API는 xn_api_token(Bearer) + CSRF 토큰 조합으로 인증
-      const authInfo = await win.webContents.executeJavaScript(`
-        (async () => {
-          const env = window.ENV || {};
-          const csrfMeta = document.querySelector('meta[name="csrf-token"]')?.content;
-          const cookies = Object.fromEntries(document.cookie.split('; ').map(c => c.split('=')));
-          return {
-            csrfMeta,
-            accessToken: env.access_token || env.api_token || null,
-            envKeys: Object.keys(env).join(','),
-            xnApiToken: cookies['xn_api_token'] || null,
-            localStorageKeys: Object.keys(localStorage).join(','),
-          };
-        })()
-      `);
-      console.log('인증 정보:', JSON.stringify(authInfo, null, 2));
 
       const modules = await win.webContents.executeJavaScript(`
         (async () => {
@@ -78,8 +110,9 @@ export function registerCoursesHandlers(): void {
           const h = {
             'Accept': 'application/json',
           };
-          if (xnToken) h['Authorization'] = 'Bearer ' + decodeURIComponent(xnToken);
-          if (csrfToken) h['X-CSRF-Token'] = decodeURIComponent(csrfToken);
+          // NOTE: Header 값은 ByteString(0~255) 제약이 있으므로 decodeURIComponent를 적용하지 않는다.
+          if (xnToken) h['Authorization'] = 'Bearer ' + xnToken;
+          if (csrfToken) h['X-CSRF-Token'] = csrfToken;
 
           const res = await fetch(url, { credentials: 'include', headers: h });
           if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -97,18 +130,27 @@ export function registerCoursesHandlers(): void {
         available: boolean;
       }
 
+      interface WikiPageItem {
+        title: string;
+        courseId: string;
+        weekPosition: number;
+        available: boolean;
+        url: string;
+        files: WikiPageFileItem[];
+      }
+
       const videos: VideoItem[] = [];
+      const wikiPages: WikiPageItem[] = [];
+      const lmsSession = getLmsSession();
 
       for (const mod of modules) {
         if (!mod.module_items) continue;
         for (const item of mod.module_items) {
-          // 영상 콘텐츠만 필터링 (everlec=에버렉 녹화, movie/video/mp4=일반 영상)
-          if (
-            ['everlec', 'movie', 'video', 'mp4'].includes(
-              item.content_data?.item_content_data?.content_type
-            )
-          ) {
-            const data = item.content_data.item_content_data;
+          const itemType = item.content_data?.item_content_data?.content_type || item.content_type;
+
+          // 영상 콘텐츠(everlec/movie/video/mp4)
+          if (VIDEO_TYPES.includes(itemType)) {
+            const data = item.content_data?.item_content_data;
             if (data.content_id) {
               const available = data.content_id !== 'not_open';
               videos.push({
@@ -121,11 +163,41 @@ export function registerCoursesHandlers(): void {
                 available
               });
             }
+            continue;
+          }
+
+          // wiki_page는 slug(content_data.url) 기반 페이지를 열어 embedded content_id를 추출
+          if (itemType === 'wiki_page' && item.content_data?.url) {
+            const pageUrl = `https://canvas.ssu.ac.kr/courses/${courseId}/pages/${item.content_data.url}?module_item_id=${item.module_item_id}`;
+            const pageApiUrl = `https://canvas.ssu.ac.kr/api/v1/courses/${courseId}/pages/${encodeURIComponent(item.content_data.url)}`;
+
+            try {
+              const pageRes = await lmsSession.fetch(pageApiUrl, {
+                headers: {
+                  Accept: 'application/json'
+                }
+              });
+              if (!pageRes.ok) continue;
+              const pageData = await pageRes.json();
+              const files = extractWikiFilesFromHtml(pageData?.body || '');
+              if (files.length === 0) continue;
+
+              wikiPages.push({
+                title: item.title,
+                courseId,
+                weekPosition: item.content_data.week_position || 0,
+                available: true,
+                url: pageUrl,
+                files
+              });
+            } catch {
+              // 위키 페이지 접근 실패 시 해당 아이템만 건너뛰고 계속 처리
+            }
           }
         }
       }
 
-      return { success: true, videos };
+      return { success: true, videos, wikiPages };
     } catch (err) {
       const msg = (err as Error).message;
       if (msg.includes('401') || msg.includes('403')) {

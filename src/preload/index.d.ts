@@ -2,6 +2,7 @@ import { ElectronAPI } from '@electron-toolkit/preload';
 import type {
   CourseItem,
   VideoItem,
+  WikiPageItem,
   VideoRefWithMeta,
   DownloadMeta,
   DownloadProgressData,
@@ -22,6 +23,7 @@ interface DownloadApi {
     success: boolean;
     error?: string;
     videos?: VideoItem[];
+    wikiPages?: WikiPageItem[];
   }>;
   downloadVideo: (
     contentId: string,
@@ -29,6 +31,11 @@ interface DownloadApi {
     format?: 'mp4' | 'mp3',
     folderPath?: string,
     meta?: DownloadMeta & { fileSize: number; duration: number }
+  ) => Promise<{ success: boolean; error?: string; filePath?: string }>;
+  downloadWikiFile: (
+    downloadUrl: string,
+    title: string,
+    folderPath?: string
   ) => Promise<{ success: boolean; error?: string; filePath?: string }>;
   downloadAll: (
     videos: VideoRefWithMeta[],
